@@ -10,6 +10,7 @@ import (
 	"omvhome/internal/compose"
 	"omvhome/internal/docker"
 	"omvhome/internal/httpx"
+	"omvhome/internal/storage"
 	"omvhome/internal/store"
 	"omvhome/internal/system"
 	"omvhome/internal/web"
@@ -25,6 +26,7 @@ type Deps struct {
 	Apps      *apps.Service
 	Catalog   *catalog.Catalog
 	Store     *store.Installer
+	Storage   *storage.Service
 }
 
 // New builds the root handler: /healthz, /api/v1/* and the embedded SPA.
@@ -45,6 +47,7 @@ func New(d Deps) http.Handler {
 	d.registerContainers(api, protect)
 	d.registerApps(api, protect)
 	d.registerStore(api, protect)
+	d.registerStorage(api, protect)
 
 	api.Handle("/", httpx.Handler(func(http.ResponseWriter, *http.Request) error {
 		return httpx.NotFound("rota não encontrada")

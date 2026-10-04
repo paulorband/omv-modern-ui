@@ -12,6 +12,7 @@ import (
 	"omvhome/internal/docker"
 	"omvhome/internal/omv"
 	"omvhome/internal/server"
+	"omvhome/internal/storage"
 	"omvhome/internal/store"
 	"omvhome/internal/system"
 )
@@ -28,6 +29,7 @@ func buildDeps(cfg config.Config) server.Deps {
 	if cfg.Mock {
 		m := omv.NewMock()
 		omv.RegisterStorageFixtures(m)
+		omv.RegisterShareFixtures(m)
 		omvClient = m
 		dm := docker.NewMock()
 		dockerClient, composeRun = dm, compose.NewMockRunner(dm)
@@ -49,6 +51,7 @@ func buildDeps(cfg config.Config) server.Deps {
 		Compose:   composeRun,
 		Apps:      appSvc,
 		Catalog:   cat,
+		Storage:   &storage.Service{},
 		Store:     store.NewInstaller(cat, appSvc, dockerClient, composeRun, cfg.PUID, cfg.PGID, cfg.TZ),
 	}
 }
