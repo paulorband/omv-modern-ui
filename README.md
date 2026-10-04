@@ -94,3 +94,12 @@ O MVP está implementado e testado com OMV e Docker simulados. **Ainda não foi 
 OMV 7 real**: nomes de métodos RPC e de campos (`ShareMgmt`, `SMB`, `NFS`, `FileSystemMgmt`, `Config.applyChangesBg`,
 `Exec.isRunning`, `UserMgmt`) foram escritos de memória e estão listados em `backend/internal/omv/*.go`.
 O primeiro passo ao testar no servidor real é conferir esses métodos com `omv-rpc` e ajustar os adaptadores.
+
+### Instalar em uma VM/servidor remoto com um comando
+
+```bash
+scripts/deploy-remote.sh usuario@IP-DO-OMV          # amd64 (PC, VirtualBox)
+scripts/deploy-remote.sh usuario@IP-DO-OMV arm64    # Raspberry Pi e similares
+```
+
+Compila, copia por SSH e instala o serviço. Rode no Git Bash (Windows) ou em qualquer shell com `ssh`, Node e Go.
