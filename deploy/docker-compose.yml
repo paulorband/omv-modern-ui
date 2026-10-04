@@ -1,0 +1,18 @@
+# Example: run OMV Home itself as a container on the OMV host.
+# - network_mode: host lets it reach OMV on 127.0.0.1:80 and check free host ports.
+# - DATA_DIR must be the SAME path inside and outside the container: the Docker daemon resolves
+#   the bind-mount paths of the apps' compose files on the host.
+services:
+  omv-home:
+    image: omv-home:latest        # docker build -f deploy/Dockerfile -t omv-home .
+    container_name: omv-home
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      OMVHOME_LISTEN: ":8080"
+      OMVHOME_OMV_URL: "http://127.0.0.1"
+      OMVHOME_DATA_DIR: /var/lib/omv-home
+      OMVHOME_TZ: America/Sao_Paulo
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # equals root on the host: see README (security)
+      - /var/lib/omv-home:/var/lib/omv-home

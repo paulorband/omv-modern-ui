@@ -6,15 +6,15 @@ feature implementada vira um commit que referencia o ID da spec (ex.: `feat(auth
 
 | ID | Spec | Status |
 |----|------|--------|
-| 00 | [Visão geral e arquitetura](00-overview.md) | Aprovada |
-| 01 | [Autenticação](01-auth.md) | MVP |
-| 02 | [Dashboard e sistema](02-dashboard.md) | MVP |
-| 03 | [Containers](03-containers.md) | MVP |
-| 04 | [Apps (home estilo ZimaOS)](04-apps.md) | MVP |
-| 05 | [App Store](05-app-store.md) | MVP |
-| 06 | [Armazenamento e compartilhamentos](06-storage.md) | MVP |
+| 00 | [Visão geral e arquitetura](00-overview.md) | Implementada |
+| 01 | [Autenticação](01-auth.md) | Implementada |
+| 02 | [Dashboard e sistema](02-dashboard.md) | Implementada |
+| 03 | [Containers](03-containers.md) | Implementada |
+| 04 | [Apps (home estilo ZimaOS)](04-apps.md) | Implementada |
+| 05 | [App Store](05-app-store.md) | Implementada |
+| 06 | [Armazenamento e compartilhamentos](06-storage.md) | Implementada |
 | 07 | [Gerenciador de arquivos](07-file-manager.md) | **Somente spec** (implementação futura) |
-| 08 | [Empacotamento e deploy](08-packaging.md) | MVP |
+| 08 | [Empacotamento e deploy](08-packaging.md) | Implementada (A08.2 `docker build` ainda não verificado: sem Docker na máquina de desenvolvimento) |
 
 ## Convenções
 

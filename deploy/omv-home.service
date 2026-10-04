@@ -1,0 +1,21 @@
+[Unit]
+Description=OMV Home - modern web interface for OpenMediaVault
+After=network-online.target docker.service
+Wants=network-online.target
+Wants=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/omv-home.env
+ExecStart=/usr/local/bin/omv-home
+Restart=on-failure
+RestartSec=3
+# Needs the Docker socket and to create app folders, so it runs as root; the rest is locked down.
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
+PrivateTmp=true
+StateDirectory=omv-home
+
+[Install]
+WantedBy=multi-user.target

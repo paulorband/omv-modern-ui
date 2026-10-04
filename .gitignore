@@ -6,3 +6,4 @@ backend/internal/web/dist/*
 /bin/
 .env
 .vscode/
+.devdata/
