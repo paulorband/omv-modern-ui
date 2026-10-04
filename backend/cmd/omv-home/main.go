@@ -8,43 +8,28 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
-	"omvhome/internal/auth"
 	"omvhome/internal/config"
-	"omvhome/internal/docker"
-	"omvhome/internal/omv"
 	"omvhome/internal/server"
-	"omvhome/internal/system"
 )
 
 func main() {
 	cfg := config.Load()
 	flag.StringVar(&cfg.Listen, "listen", cfg.Listen, "listen address")
 	flag.BoolVar(&cfg.Mock, "mock", cfg.Mock, "simulate OMV and Docker (development)")
+	flag.StringVar(&cfg.DataDir, "data-dir", cfg.DataDir, "state directory")
+	flag.StringVar(&cfg.AppDataDir, "appdata-dir", cfg.AppDataDir, "app volumes directory")
 	flag.Parse()
-
-	var omvClient omv.Client = omv.NewRPCClient(cfg.OMVURL)
-	if cfg.Mock {
-		m := omv.NewMock()
-		omv.RegisterStorageFixtures(m)
-		omvClient = m
-	}
-	collector := system.New(cfg.Mock)
-	var dockerClient docker.Client = docker.NewUnixClient(cfg.DockerSocket)
-	if cfg.Mock {
-		dockerClient = docker.NewMock()
+	if os.Getenv("OMVHOME_APPDATA_DIR") == "" && !flagSet("appdata-dir") {
+		cfg.AppDataDir = filepath.Join(cfg.DataDir, "appdata") // follow a --data-dir override
 	}
 
 	srv := &http.Server{
-		Addr: cfg.Listen,
-		Handler: server.New(server.Deps{
-			Auth:      auth.NewService(omvClient),
-			Collector: collector,
-			Hub:       system.NewHub(collector, 2*time.Second),
-			Docker:    dockerClient,
-		}),
+		Addr:              cfg.Listen,
+		Handler:           server.New(buildDeps(cfg)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -62,4 +47,10 @@ func main() {
 		slog.Error("server failed", "err", err)
 		os.Exit(1)
 	}
+}
+
+func flagSet(name string) bool {
+	set := false
+	flag.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return set
 }

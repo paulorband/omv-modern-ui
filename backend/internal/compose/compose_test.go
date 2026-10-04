@@ -1,0 +1,120 @@
+package compose
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+
+	"omvhome/internal/docker"
+)
+
+func TestExecRunnerBuildsArgListWithoutShell(t *testing.T) { // A05.7
+	var gotDir string
+	var gotArgs [][]string
+	r := &ExecRunner{Exec: func(_ context.Context, dir string, args []string, _ func(string)) error {
+		gotDir = dir
+		gotArgs = append(gotArgs, args)
+		return nil
+	}}
+	dir := filepath.Join("data", "apps", "jellyfin")
+	// A hostile-looking project name stays a single argv element: no shell is involved.
+	project := "omvhome-x; rm -rf /"
+	_ = r.Up(context.Background(), project, dir, nil)
+	_ = r.Stop(context.Background(), project, dir)
+	_ = r.Down(context.Background(), project, dir)
+
+	base := []string{"compose", "-p", project, "--project-directory", dir, "-f", filepath.Join(dir, ComposeFile)}
+	want := [][]string{
+		append(append([]string{}, base...), "up", "-d", "--remove-orphans"),
+		append(append([]string{}, base...), "stop"),
+		append(append([]string{}, base...), "down", "--remove-orphans"),
+	}
+	if !reflect.DeepEqual(gotArgs, want) {
+		t.Fatalf("args:\n got %q\nwant %q", gotArgs, want)
+	}
+	if gotDir != dir {
+		t.Errorf("dir %q", gotDir)
+	}
+}
+
+func TestAvailableReflectsExecutor(t *testing.T) {
+	ok := &ExecRunner{Exec: func(context.Context, string, []string, func(string)) error { return nil }}
+	bad := &ExecRunner{Exec: func(context.Context, string, []string, func(string)) error { return ErrUnavailable }}
+	if !ok.Available(context.Background()) || bad.Available(context.Background()) {
+		t.Fatal("Available must mirror `docker compose version`")
+	}
+}
+
+func TestInterpolate(t *testing.T) {
+	vars := map[string]string{"APPDATA": "/data/app", "EMPTY": ""}
+	cases := map[string]string{
+		"${APPDATA}/config:/config": "/data/app/config:/config",
+		"${PORT:-8096}:8096":        "8096:8096",
+		"${EMPTY:-fallback}":        "fallback",
+		"${MISSING}":                "",
+		"plain":                     "plain",
+	}
+	for in, want := range cases {
+		if got := Interpolate(in, vars); got != want {
+			t.Errorf("%q: got %q want %q", in, got, want)
+		}
+	}
+}
+
+func TestMockRunnerCreatesContainersFromComposeFile(t *testing.T) {
+	dir := t.TempDir()
+	yml := `services:
+  web:
+    image: nginx
+    ports: ["${PORT:-8080}:80"]
+    labels:
+      omvhome.app: demo
+      omvhome.port: "8080"
+  db:
+    image: postgres
+`
+	if err := os.WriteFile(filepath.Join(dir, ComposeFile), []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, EnvFile), []byte("PORT=9090\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dm := docker.NewMock()
+	m := NewMockRunner(dm)
+	ctx := context.Background()
+	if err := m.Up(ctx, "omvhome-demo", dir, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Up(ctx, "omvhome-demo", dir, nil); err != nil { // idempotent
+		t.Fatal(err)
+	}
+	cs, _ := dm.ListContainers(ctx)
+	var proj []docker.Container
+	for _, c := range cs {
+		if c.Labels[docker.ComposeProject] == "omvhome-demo" {
+			proj = append(proj, c)
+		}
+	}
+	if len(proj) != 2 {
+		t.Fatalf("want 2 containers, got %d", len(proj))
+	}
+	for _, c := range proj {
+		if c.AppID == "demo" && (len(c.Ports) != 1 || c.Ports[0].Public != 9090) {
+			t.Errorf("port from .env not applied: %+v", c.Ports)
+		}
+	}
+	_ = m.Stop(ctx, "omvhome-demo", dir)
+	d, _ := dm.InspectContainer(ctx, proj[0].Name)
+	if d.State != "exited" {
+		t.Errorf("state after stop: %s", d.State)
+	}
+	_ = m.Down(ctx, "omvhome-demo", dir)
+	cs, _ = dm.ListContainers(ctx)
+	for _, c := range cs {
+		if c.Labels[docker.ComposeProject] == "omvhome-demo" {
+			t.Errorf("container survived down: %s", c.Name)
+		}
+	}
+}

@@ -45,7 +45,7 @@ func (d Deps) registerContainers(api *http.ServeMux, protect func(http.Handler) 
 	h := func(fn httpx.Handler) http.Handler { return protect(fn) }
 
 	api.Handle("GET /docker/status", h(func(w http.ResponseWriter, r *http.Request) error {
-		resp := map[string]any{"available": false}
+		resp := map[string]any{"available": false, "composeAvailable": d.Compose != nil && d.Compose.Available(r.Context())}
 		if v, err := d.Docker.Ping(r.Context()); err != nil {
 			resp["error"] = "Docker indisponível"
 		} else {
