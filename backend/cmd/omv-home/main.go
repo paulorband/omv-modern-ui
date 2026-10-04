@@ -11,7 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"omvhome/internal/auth"
 	"omvhome/internal/config"
+	"omvhome/internal/omv"
 	"omvhome/internal/server"
 )
 
@@ -21,9 +23,14 @@ func main() {
 	flag.BoolVar(&cfg.Mock, "mock", cfg.Mock, "simulate OMV and Docker (development)")
 	flag.Parse()
 
+	var omvClient omv.Client = omv.NewRPCClient(cfg.OMVURL)
+	if cfg.Mock {
+		omvClient = omv.NewMock()
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           server.New(),
+		Handler:           server.New(server.Deps{Auth: auth.NewService(omvClient)}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
