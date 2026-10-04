@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"omvhome/internal/auth"
+	"omvhome/internal/docker"
 	"omvhome/internal/httpx"
 	"omvhome/internal/system"
 	"omvhome/internal/web"
@@ -15,6 +16,7 @@ type Deps struct {
 	Auth      *auth.Service
 	Collector system.Collector
 	Hub       *system.Hub
+	Docker    docker.Client
 }
 
 // New builds the root handler: /healthz, /api/v1/* and the embedded SPA.
@@ -32,6 +34,7 @@ func New(d Deps) http.Handler {
 	api.Handle("GET /auth/me", protect(d.Auth.MeHandler()))
 
 	d.registerSystem(api, protect)
+	d.registerContainers(api, protect)
 
 	api.Handle("/", httpx.Handler(func(http.ResponseWriter, *http.Request) error {
 		return httpx.NotFound("rota não encontrada")
