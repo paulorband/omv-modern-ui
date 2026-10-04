@@ -152,7 +152,7 @@ func TestCreateValidationDoesNotCallOMV(t *testing.T) { // A06.3
 		{Name: "", FilesystemUUID: fsUUID},
 		{Name: "has space", FilesystemUUID: fsUUID},
 		{Name: strings.Repeat("a", 33), FilesystemUUID: fsUUID},
-		{Name: "ok", FilesystemUUID: "not-a-uuid"},
+		{Name: "ok", FilesystemUUID: "bad ref!"},
 		{Name: "ok", FilesystemUUID: fsUUID, RelativePath: "../etc"},
 		{Name: "ok", FilesystemUUID: fsUUID, RelativePath: "/abs"},
 		{Name: "ok", FilesystemUUID: fsUUID, RelativePath: "a/../../b"},

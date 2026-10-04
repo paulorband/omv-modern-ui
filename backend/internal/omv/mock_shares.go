@@ -30,6 +30,7 @@ func RegisterShareFixtures(m *Mock) *shareState {
 	st.folders = []map[string]any{{
 		"uuid": "aaaaaaaa-0000-4000-8000-000000000001", "name": "media",
 		"mntentref": "11111111-aaaa-4aaa-8aaa-111111111111", "reldirpath": "media/", "comment": "Filmes e séries",
+		"absdirpath": "/srv/dev-disk-by-uuid-1111/media/",
 	}}
 	st.smb = []map[string]any{{
 		"uuid": "bbbbbbbb-0000-4000-8000-000000000001", "sharedfolderref": "aaaaaaaa-0000-4000-8000-000000000001",

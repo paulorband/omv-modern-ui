@@ -58,7 +58,6 @@ func ListFilesystems(ctx context.Context, call Caller) ([]Filesystem, error) {
 		Mounted    bool     `json:"mounted"`
 		Size       flexUint `json:"size"`
 		Available  flexUint `json:"available"`
-		Used       flexUint `json:"used"`
 	}
 	if err := call(ctx, "FileSystemMgmt", "enumerateFilesystems", nil, &raw); err != nil {
 		return nil, err
@@ -70,9 +69,9 @@ func ListFilesystems(ctx context.Context, call Caller) ([]Filesystem, error) {
 		}
 		fs := Filesystem{
 			UUID: r.UUID, Device: r.DeviceFile, Label: r.Label, Type: r.Type, MountPoint: r.MountPoint,
-			Total: uint64(r.Size), Used: uint64(r.Used), Free: uint64(r.Available),
+			Total: uint64(r.Size), Free: uint64(r.Available),
 		}
-		if fs.Used == 0 && fs.Total >= fs.Free {
+		if fs.Total >= fs.Free { // OMV sends "used" as text such as "1.67 TiB"; derive it instead
 			fs.Used = fs.Total - fs.Free
 		}
 		if fs.Total > 0 {
@@ -102,10 +101,10 @@ func RegisterStorageFixtures(m *Mock) {
 		return []map[string]any{
 			{"uuid": "11111111-aaaa-4aaa-8aaa-111111111111", "devicefile": "/dev/sda1", "label": "data",
 				"type": "ext4", "mountpoint": "/srv/dev-disk-by-uuid-1111", "mounted": true,
-				"size": strconv.FormatUint(2000*gib, 10), "available": strconv.FormatUint(1240*gib, 10), "used": strconv.FormatUint(760*gib, 10)},
+				"size": strconv.FormatUint(2000*gib, 10), "available": strconv.FormatUint(1240*gib, 10), "used": "760.00 GiB"},
 			{"uuid": "22222222-bbbb-4bbb-8bbb-222222222222", "devicefile": "/dev/sdb1", "label": "backup",
 				"type": "ext4", "mountpoint": "/srv/dev-disk-by-uuid-2222", "mounted": true,
-				"size": strconv.FormatUint(4000*gib, 10), "available": strconv.FormatUint(300*gib, 10), "used": strconv.FormatUint(3700*gib, 10)},
+				"size": strconv.FormatUint(4000*gib, 10), "available": strconv.FormatUint(300*gib, 10), "used": "3.61 TiB"},
 			{"uuid": "33333333-cccc-4ccc-8ccc-333333333333", "devicefile": "/dev/sdc1", "label": "",
 				"type": "ext4", "mountpoint": "", "mounted": false, "size": "0", "available": "0", "used": "0"},
 		}, nil

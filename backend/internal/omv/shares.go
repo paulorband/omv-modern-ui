@@ -26,6 +26,7 @@ type SharedFolder struct {
 	Name       string `json:"name"`
 	MntEntRef  string `json:"mntentref"`
 	RelDirPath string `json:"reldirpath"`
+	AbsDirPath string `json:"absdirpath"`
 	Comment    string `json:"comment"`
 }
 
@@ -94,11 +95,11 @@ func DeleteSharedFolder(ctx context.Context, call Caller, uuid string) error {
 }
 
 // SetSMBShare wraps SMB.setShare. uuid = NewObjectUUID creates; an existing uuid updates.
-// guest: "no" or "only" ⚠️.
+// guest: "no" or "allow" (value seen on a real OMV share).
 func SetSMBShare(ctx context.Context, call Caller, uuid, folderUUID, name, comment string, guest bool) (string, error) {
 	g := "no"
 	if guest {
-		g = "only"
+		g = "allow"
 	}
 	params := map[string]any{
 		"uuid": uuid, "sharedfolderref": folderUUID, "name": name, "comment": comment,

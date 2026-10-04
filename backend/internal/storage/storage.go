@@ -18,6 +18,8 @@ var (
 	nameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,32}$`)
 	uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	relRe  = regexp.MustCompile(`^[a-zA-Z0-9_./ -]+$`)
+	// Filesystem refs are not always UUIDs (a real NTFS disk reports "247A088F7A085FC2").
+	fsRefRe = regexp.MustCompile(`^[A-Za-z0-9-]{4,64}$`)
 )
 
 // InvalidError is bad input (HTTP 400); ConflictError a clash (409); ErrNotFound a missing share (404).
@@ -96,7 +98,9 @@ func (s *Service) List(ctx context.Context, call omv.Caller) ([]Share, error) {
 	out := make([]Share, 0, len(folders))
 	for _, f := range folders {
 		sh := Share{UUID: f.UUID, Name: f.Name, FilesystemUUID: f.MntEntRef, Comment: f.Comment}
-		if mp, ok := mounts[f.MntEntRef]; ok {
+		if f.AbsDirPath != "" {
+			sh.Path = path.Clean(f.AbsDirPath) // computed by OMV (real instances report it as absdirpath)
+		} else if mp, ok := mounts[f.MntEntRef]; ok {
 			sh.Path = path.Join(mp, f.RelDirPath)
 		}
 		for _, x := range smb {
@@ -149,7 +153,7 @@ func (in *CreateInput) Validate() error {
 	if !nameRe.MatchString(in.Name) {
 		return &InvalidError{"nome inválido: use 1 a 32 letras, números, _ ou -"}
 	}
-	if !ValidUUID(in.FilesystemUUID) {
+	if !fsRefRe.MatchString(in.FilesystemUUID) {
 		return &InvalidError{"filesystem inválido"}
 	}
 	if in.RelativePath == "" {
