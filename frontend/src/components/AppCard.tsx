@@ -10,7 +10,7 @@ export type AppAction = 'start' | 'stop' | 'restart' | 'logs' | 'update' | 'remo
 const STATE_LABEL: Record<App['state'], string> = { running: 'Em execução', stopped: 'Parado', partial: 'Parcial' }
 const STATE_DOT: Record<App['state'], string> = { running: 'bg-ok', stopped: 'bg-muted', partial: 'bg-warn' }
 
-export function AppCard({ app, busy, onAction }: { app: App; busy?: boolean; onAction: (a: AppAction) => void }) {
+export function AppCard({ app, busy, highlight, onAction }: { app: App; busy?: boolean; highlight?: boolean; onAction: (a: AppAction) => void }) {
   const [menu, setMenu] = useState(false)
   const root = useRef<HTMLDivElement>(null)
 
@@ -49,7 +49,13 @@ export function AppCard({ app, busy, onAction }: { app: App; busy?: boolean; onA
   const bodyCls = 'flex w-full flex-col items-center gap-2 rounded-2xl p-4 pt-5'
 
   return (
-    <div ref={root} className="group relative rounded-2xl border border-line bg-surface shadow-card backdrop-blur-xl transition hover:-translate-y-0.5">
+    <div
+      ref={root}
+      className={cx(
+        'group relative rounded-2xl border border-line bg-surface shadow-card backdrop-blur-xl transition hover:-translate-y-0.5',
+        highlight && 'ring-2 ring-accent',
+      )}
+    >
       {running && canOpen ? (
         <a href={appUrl(app)} target="_blank" rel="noreferrer" className={bodyCls} aria-label={`Abrir ${app.name}`}>
           {body}

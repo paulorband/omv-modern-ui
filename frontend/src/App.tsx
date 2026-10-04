@@ -6,6 +6,8 @@ import { Spinner } from './components/ui'
 import { Login } from './pages/Login'
 import { Home } from './pages/Home'
 import { Files } from './pages/Files'
+import { Store } from './pages/Store'
+import { StoreApp } from './pages/StoreApp'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user } = useAuth()
@@ -27,6 +29,8 @@ export function App() {
         }
       >
         <Route index element={<Home />} />
+        <Route path="store" element={<Store />} />
+        <Route path="store/:id" element={<StoreApp />} />
         <Route path="files" element={<Files />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

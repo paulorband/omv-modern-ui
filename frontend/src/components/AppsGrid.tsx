@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, Store } from 'lucide-react'
 import { del, get, post } from '../lib/api'
@@ -20,6 +20,7 @@ export function filterApps(apps: App[], query: string, category: string): App[] 
 export function AppsGrid() {
   const qc = useQueryClient()
   const toast = useToast()
+  const highlight = useSearchParams()[0].get('highlight')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState(ALL)
   const [logsFor, setLogsFor] = useState<App | null>(null)
@@ -97,7 +98,7 @@ export function AppsGrid() {
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {visible.map((a) => (
             <li key={a.id}>
-              <AppCard app={a} busy={busyId === a.id} onAction={(act) => onAction(a, act)} />
+              <AppCard app={a} busy={busyId === a.id} highlight={a.id === highlight} onAction={(act) => onAction(a, act)} />
             </li>
           ))}
         </ul>

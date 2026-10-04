@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { cloneElement, useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { ApiError } from '../lib/api'
 
@@ -169,13 +169,26 @@ export function Modal({
 export const inputCls =
   'w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-accent focus:outline-none'
 
-export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
+/**
+ * Labelled form control. The label names the control; hint/error are linked with
+ * aria-describedby so the accessible name stays short.
+ */
+export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactElement<Record<string, unknown>> }) {
+  const id = useId()
+  const noteId = `${id}-note`
+  const note = error ?? hint
   return (
-    <label className="block space-y-1">
-      <span className="text-sm font-medium">{label}</span>
-      {children}
-      {error ? <span className="block text-xs text-danger">{error}</span> : hint ? <span className="block text-xs text-muted">{hint}</span> : null}
-    </label>
+    <div className="space-y-1">
+      <label htmlFor={id} className="block text-sm font-medium">
+        {label}
+      </label>
+      {cloneElement(children, { id, 'aria-describedby': note ? noteId : undefined, 'aria-invalid': error ? true : undefined })}
+      {note && (
+        <span id={noteId} className={cx('block text-xs', error ? 'text-danger' : 'text-muted')}>
+          {note}
+        </span>
+      )}
+    </div>
   )
 }
 
