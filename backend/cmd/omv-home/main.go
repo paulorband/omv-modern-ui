@@ -15,6 +15,7 @@ import (
 	"omvhome/internal/config"
 	"omvhome/internal/omv"
 	"omvhome/internal/server"
+	"omvhome/internal/system"
 )
 
 func main() {
@@ -25,12 +26,19 @@ func main() {
 
 	var omvClient omv.Client = omv.NewRPCClient(cfg.OMVURL)
 	if cfg.Mock {
-		omvClient = omv.NewMock()
+		m := omv.NewMock()
+		omv.RegisterStorageFixtures(m)
+		omvClient = m
 	}
+	collector := system.New(cfg.Mock)
 
 	srv := &http.Server{
-		Addr:              cfg.Listen,
-		Handler:           server.New(server.Deps{Auth: auth.NewService(omvClient)}),
+		Addr: cfg.Listen,
+		Handler: server.New(server.Deps{
+			Auth:      auth.NewService(omvClient),
+			Collector: collector,
+			Hub:       system.NewHub(collector, 2*time.Second),
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

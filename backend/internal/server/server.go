@@ -6,12 +6,15 @@ import (
 
 	"omvhome/internal/auth"
 	"omvhome/internal/httpx"
+	"omvhome/internal/system"
 	"omvhome/internal/web"
 )
 
 // Deps are the collaborators the routes need.
 type Deps struct {
-	Auth *auth.Service
+	Auth      *auth.Service
+	Collector system.Collector
+	Hub       *system.Hub
 }
 
 // New builds the root handler: /healthz, /api/v1/* and the embedded SPA.
@@ -27,6 +30,8 @@ func New(d Deps) http.Handler {
 	api.Handle("POST /auth/login", d.Auth.LoginHandler())
 	api.Handle("POST /auth/logout", d.Auth.LogoutHandler())
 	api.Handle("GET /auth/me", protect(d.Auth.MeHandler()))
+
+	d.registerSystem(api, protect)
 
 	api.Handle("/", httpx.Handler(func(http.ResponseWriter, *http.Request) error {
 		return httpx.NotFound("rota não encontrada")
