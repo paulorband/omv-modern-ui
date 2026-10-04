@@ -39,3 +39,29 @@ export function renderApp(ui: ReactElement, { route = '/' }: { route?: string } 
     </QueryClientProvider>,
   )
 }
+
+/** Minimal EventSource double: tests push events with `emit`. */
+export class FakeEventSource {
+  static instances: FakeEventSource[] = []
+  listeners: Record<string, ((e: MessageEvent) => void)[]> = {}
+  onerror: (() => void) | null = null
+  closed = false
+  constructor(public url: string) {
+    FakeEventSource.instances.push(this)
+  }
+  addEventListener(name: string, fn: (e: MessageEvent) => void) {
+    ;(this.listeners[name] ??= []).push(fn)
+  }
+  close() {
+    this.closed = true
+  }
+  emit(name: string, data: unknown) {
+    for (const fn of this.listeners[name] ?? []) fn(new MessageEvent(name, { data: JSON.stringify(data) }))
+  }
+  static reset() {
+    FakeEventSource.instances = []
+  }
+  static last(urlPart: string) {
+    return [...FakeEventSource.instances].reverse().find((i) => i.url.includes(urlPart))
+  }
+}
