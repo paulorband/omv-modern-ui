@@ -6,6 +6,7 @@ import { Spinner } from './components/ui'
 import { Login } from './pages/Login'
 import { Home } from './pages/Home'
 import { Files } from './pages/Files'
+import { Containers } from './pages/Containers'
 import { Store } from './pages/Store'
 import { StoreApp } from './pages/StoreApp'
 
@@ -31,6 +32,7 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="store" element={<Store />} />
         <Route path="store/:id" element={<StoreApp />} />
+        <Route path="containers" element={<Containers />} />
         <Route path="files" element={<Files />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
