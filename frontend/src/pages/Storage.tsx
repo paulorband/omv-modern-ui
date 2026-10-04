@@ -4,13 +4,14 @@ import { ExternalLink, HardDrive, Plus, Trash2 } from 'lucide-react'
 import { del, get, patch } from '../lib/api'
 import { formatBytes } from '../lib/format'
 import type { Disk, Share } from '../lib/types'
-import { omvAdminUrl } from '../components/Layout'
+import { useOmvAdminUrl } from '../lib/useOmvUrl'
 import { ShareWizard } from '../components/ShareWizard'
 import { useToast } from '../components/Toast'
 import { Badge, Button, Card, EmptyState, ErrorBox, Modal, PageHeader, ProgressBar, Spinner, errorMessage } from '../components/ui'
 
 export function Storage() {
   const [creating, setCreating] = useState(false)
+  const omvUrl = useOmvAdminUrl()
   const disks = useQuery({ queryKey: ['storage', 'filesystems'], queryFn: ({ signal }) => get<Disk[]>('/storage/filesystems', signal) })
 
   return (
@@ -20,7 +21,7 @@ export function Storage() {
         subtitle="Discos e pastas compartilhadas na rede."
         actions={
           <>
-            <a href={omvAdminUrl()} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-surface-2 px-3.5 py-2 text-sm font-medium hover:bg-line">
+            <a href={omvUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-surface-2 px-3.5 py-2 text-sm font-medium hover:bg-line">
               <ExternalLink className="h-4 w-4" aria-hidden /> Configurações avançadas
             </a>
             <Button variant="primary" onClick={() => setCreating(true)} disabled={!disks.data?.length}>

@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { ExternalLink, FolderOpen, HardDrive, Home, LogOut, Package, Store } from 'lucide-react'
 import { useAuth } from '../lib/auth'
+import { useOmvAdminUrl } from '../lib/useOmvUrl'
 import { cx } from './ui'
 
 const NAV = [
@@ -11,13 +12,9 @@ const NAV = [
   { to: '/files', label: 'Arquivos', icon: FolderOpen },
 ]
 
-/** Link to the original OMV interface for advanced settings (same host, port 80). */
-export function omvAdminUrl(): string {
-  return `${window.location.protocol}//${window.location.hostname}/`
-}
-
 export function Layout() {
   const { user, logout } = useAuth()
+  const omvUrl = useOmvAdminUrl()
   const item = ({ isActive }: { isActive: boolean }) =>
     cx(
       'flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition',
@@ -45,7 +42,7 @@ export function Layout() {
 
         <div className="flex items-center gap-1">
           <a
-            href={omvAdminUrl()}
+            href={omvUrl}
             target="_blank"
             rel="noreferrer"
             className="hidden items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-muted hover:bg-surface-2 hover:text-fg md:flex"

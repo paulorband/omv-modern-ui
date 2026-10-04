@@ -52,6 +52,7 @@ func buildDeps(cfg config.Config) server.Deps {
 		Apps:      appSvc,
 		Catalog:   cat,
 		Storage:   &storage.Service{},
+		OMVPort:   cfg.OMVPort(),
 		Store:     store.NewInstaller(cat, appSvc, dockerClient, composeRun, cfg.PUID, cfg.PGID, cfg.TZ),
 	}
 }

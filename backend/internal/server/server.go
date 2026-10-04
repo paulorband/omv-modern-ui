@@ -27,6 +27,7 @@ type Deps struct {
 	Catalog   *catalog.Catalog
 	Store     *store.Installer
 	Storage   *storage.Service
+	OMVPort   int
 }
 
 // New builds the root handler: /healthz, /api/v1/* and the embedded SPA.
@@ -43,6 +44,10 @@ func New(d Deps) http.Handler {
 	api.Handle("POST /auth/logout", d.Auth.LogoutHandler())
 	api.Handle("GET /auth/me", protect(d.Auth.MeHandler()))
 
+	api.Handle("GET /meta", protect(httpx.Handler(func(w http.ResponseWriter, _ *http.Request) error {
+		httpx.JSON(w, http.StatusOK, map[string]int{"omvPort": d.OMVPort})
+		return nil
+	})))
 	d.registerSystem(api, protect)
 	d.registerContainers(api, protect)
 	d.registerApps(api, protect)

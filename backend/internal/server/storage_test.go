@@ -110,3 +110,16 @@ func TestStorageErrorMapping(t *testing.T) {
 		t.Fatalf("share must be rolled back: %s", rec.Body)
 	}
 }
+
+func TestMetaExposesOMVPort(t *testing.T) {
+	m := omv.NewMock()
+	h := New(Deps{Auth: auth.NewService(m), OMVPort: 81})
+	if rec := do(h, "GET", "/api/v1/meta", "", nil, false); rec.Code != 401 {
+		t.Fatalf("meta must require auth: %d", rec.Code)
+	}
+	c := login(t, h)
+	rec := do(h, "GET", "/api/v1/meta", "", c, false)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"omvPort":81`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+}

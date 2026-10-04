@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { appUrl, formatBytes, formatUptime, percent, SHARE_NAME_RE } from './format'
 import { parseSSE } from './sse'
+import { omvUrlFor } from './useOmvUrl'
 
 describe('format', () => {
   it('formats bytes', () => {
@@ -50,5 +51,18 @@ describe('parseSSE', () => {
   it('defaults the event name and joins multi-line data', () => {
     const { events } = parseSSE('data: x\ndata: y\n\n')
     expect(events).toEqual([{ event: 'message', data: 'x\ny' }])
+  })
+})
+
+describe('omvUrlFor', () => {
+  const http = { protocol: 'http:', hostname: '192.168.1.5' }
+  it('uses the configured OMV port', () => {
+    expect(omvUrlFor(81, http)).toBe('http://192.168.1.5:81/')
+    expect(omvUrlFor(80, http)).toBe('http://192.168.1.5/')
+    expect(omvUrlFor(443, { protocol: 'https:', hostname: 'omv.local' })).toBe('https://omv.local/')
+    expect(omvUrlFor(8443, { protocol: 'https:', hostname: 'omv.local' })).toBe('https://omv.local:8443/')
+  })
+  it('falls back to the bare host while the port is unknown', () => {
+    expect(omvUrlFor(undefined, http)).toBe('http://192.168.1.5/')
   })
 })

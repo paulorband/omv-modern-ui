@@ -61,7 +61,7 @@ Variáveis de ambiente (arquivo `/etc/omv-home.env`, modelo em `deploy/omv-home.
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
 | `OMVHOME_LISTEN` | `:8080` | Endereço de escuta |
-| `OMVHOME_OMV_URL` | `http://127.0.0.1` | URL do OMV (`/rpc.php`) |
+| `OMVHOME_OMV_URL` | `http://127.0.0.1` | URL do OMV (`/rpc.php`). **Inclua a porta se você mudou a do OMV** (ex.: `http://127.0.0.1:81`); o link "Configurações avançadas" usa a mesma porta |
 | `OMVHOME_DOCKER_SOCKET` | `/var/run/docker.sock` | Socket do Docker |
 | `OMVHOME_DATA_DIR` | `/var/lib/omv-home` | Projetos compose dos apps instalados |
 | `OMVHOME_APPDATA_DIR` | `<DATA_DIR>/appdata` | Dados dos apps (use um disco do OMV) |

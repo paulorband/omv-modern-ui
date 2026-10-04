@@ -2,6 +2,7 @@
 package config
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -64,4 +65,20 @@ func systemTimezone() string {
 		}
 	}
 	return "UTC"
+}
+
+// OMVPort is the TCP port of the OMV web interface, taken from OMVURL (80/443 when implicit).
+// The UI uses it to build the "advanced settings" link.
+func (c Config) OMVPort() int {
+	u, err := url.Parse(c.OMVURL)
+	if err != nil {
+		return 80
+	}
+	if p, err := strconv.Atoi(u.Port()); err == nil && p > 0 && p < 65536 {
+		return p
+	}
+	if u.Scheme == "https" {
+		return 443
+	}
+	return 80
 }
