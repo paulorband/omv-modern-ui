@@ -1,0 +1,8 @@
+node_modules/
+frontend/dist/
+backend/internal/web/dist/*
+!backend/internal/web/dist/.gitkeep
+*.exe
+/bin/
+.env
+.vscode/
