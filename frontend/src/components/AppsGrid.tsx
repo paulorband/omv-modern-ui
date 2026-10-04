@@ -97,7 +97,7 @@ export function AppsGrid() {
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {visible.map((a) => (
-            <li key={a.id}>
+            <li key={a.id} className="h-full">
               <AppCard app={a} busy={busyId === a.id} highlight={a.id === highlight} onAction={(act) => onAction(a, act)} />
             </li>
           ))}

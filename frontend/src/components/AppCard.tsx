@@ -52,7 +52,7 @@ export function AppCard({ app, busy, highlight, onAction }: { app: App; busy?: b
     <div
       ref={root}
       className={cx(
-        'group relative rounded-2xl border border-line bg-surface shadow-card backdrop-blur-xl transition hover:-translate-y-0.5',
+        'group relative h-full rounded-2xl border border-line bg-surface shadow-card backdrop-blur-xl transition hover:-translate-y-0.5',
         highlight && 'ring-2 ring-accent',
       )}
     >
