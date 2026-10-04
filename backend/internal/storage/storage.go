@@ -18,8 +18,6 @@ var (
 	nameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,32}$`)
 	uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	relRe  = regexp.MustCompile(`^[a-zA-Z0-9_./ -]+$`)
-	// Filesystem refs are not always UUIDs (a real NTFS disk reports "247A088F7A085FC2").
-	fsRefRe = regexp.MustCompile(`^[A-Za-z0-9-]{4,64}$`)
 )
 
 // InvalidError is bad input (HTTP 400); ConflictError a clash (409); ErrNotFound a missing share (404).
@@ -53,23 +51,23 @@ func step(name string, err error) error {
 func ValidUUID(s string) bool { return uuidRe.MatchString(s) }
 
 type Share struct {
-	UUID           string `json:"uuid"`
-	Name           string `json:"name"`
-	Path           string `json:"path"`
-	FilesystemUUID string `json:"filesystemUuid"`
-	Comment        string `json:"comment"`
-	SMB            bool   `json:"smb"`
-	SMBGuest       bool   `json:"smbGuest"`
-	NFS            bool   `json:"nfs"`
+	UUID      string `json:"uuid"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	MntEntRef string `json:"mntEntRef"`
+	Comment   string `json:"comment"`
+	SMB       bool   `json:"smb"`
+	SMBGuest  bool   `json:"smbGuest"`
+	NFS       bool   `json:"nfs"`
 }
 
 type CreateInput struct {
-	Name           string `json:"name"`
-	FilesystemUUID string `json:"filesystemUuid"`
-	RelativePath   string `json:"relativePath"`
-	Comment        string `json:"comment"`
-	SMB            bool   `json:"smb"`
-	SMBGuest       bool   `json:"smbGuest"`
+	Name         string `json:"name"`
+	MntEntRef    string `json:"mntEntRef"`
+	RelativePath string `json:"relativePath"`
+	Comment      string `json:"comment"`
+	SMB          bool   `json:"smb"`
+	SMBGuest     bool   `json:"smbGuest"`
 }
 
 type UpdateInput struct {
@@ -90,14 +88,14 @@ func (s *Service) List(ctx context.Context, call omv.Caller) ([]Share, error) {
 	smb, _ := omv.ListSMBShares(ctx, call)
 	nfs, _ := omv.ListNFSShares(ctx, call)
 	mounts := map[string]string{}
-	if fss, err := omv.ListFilesystems(ctx, call); err == nil {
+	if fss, err := omv.ListFilesystemsWithRefs(ctx, call); err == nil {
 		for _, f := range fss {
-			mounts[f.UUID] = f.MountPoint
+			mounts[f.MntEntRef] = f.MountPoint
 		}
 	}
 	out := make([]Share, 0, len(folders))
 	for _, f := range folders {
-		sh := Share{UUID: f.UUID, Name: f.Name, FilesystemUUID: f.MntEntRef, Comment: f.Comment}
+		sh := Share{UUID: f.UUID, Name: f.Name, MntEntRef: f.MntEntRef, Comment: f.Comment}
 		if f.AbsDirPath != "" {
 			sh.Path = path.Clean(f.AbsDirPath) // computed by OMV (real instances report it as absdirpath)
 		} else if mp, ok := mounts[f.MntEntRef]; ok {
@@ -153,8 +151,8 @@ func (in *CreateInput) Validate() error {
 	if !nameRe.MatchString(in.Name) {
 		return &InvalidError{"nome inválido: use 1 a 32 letras, números, _ ou -"}
 	}
-	if !fsRefRe.MatchString(in.FilesystemUUID) {
-		return &InvalidError{"filesystem inválido"}
+	if !ValidUUID(in.MntEntRef) {
+		return &InvalidError{"disco inválido"}
 	}
 	if in.RelativePath == "" {
 		in.RelativePath = in.Name
@@ -191,7 +189,7 @@ func (s *Service) Create(ctx context.Context, call omv.Caller, in CreateInput) (
 		}
 	}
 
-	folderUUID, err := omv.CreateSharedFolder(ctx, call, in.Name, in.FilesystemUUID, in.RelativePath, in.Comment)
+	folderUUID, err := omv.CreateSharedFolder(ctx, call, in.Name, in.MntEntRef, in.RelativePath, in.Comment)
 	if err != nil {
 		return nil, step("criar pasta compartilhada", err)
 	}

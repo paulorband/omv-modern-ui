@@ -146,7 +146,7 @@ var ApplyTimeout = 60 * time.Second
 var ApplyPollInterval = 500 * time.Millisecond
 
 // ApplyChanges deploys pending configuration: Config.applyChangesBg returns the name of a
-// background-job file, polled with Exec.isRunning until it finishes ⚠️.
+// background-job file, polled with Exec.isRunning ({"filename","running"}) until it finishes.
 func ApplyChanges(ctx context.Context, call Caller) error {
 	var job string
 	if err := call(ctx, "Config", "applyChangesBg", map[string]any{"modules": []string{}, "force": false}, &job); err != nil {
@@ -158,11 +158,13 @@ func ApplyChanges(ctx context.Context, call Caller) error {
 	ctx, cancel := context.WithTimeout(ctx, ApplyTimeout)
 	defer cancel()
 	for {
-		var running bool
-		if err := call(ctx, "Exec", "isRunning", map[string]any{"filename": job}, &running); err != nil {
+		var st struct {
+			Running bool `json:"running"`
+		}
+		if err := call(ctx, "Exec", "isRunning", map[string]any{"filename": job}, &st); err != nil {
 			return err
 		}
-		if !running {
+		if !st.Running {
 			return nil
 		}
 		select {

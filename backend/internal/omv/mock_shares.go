@@ -105,7 +105,15 @@ func RegisterShareFixtures(m *Mock) *shareState {
 		st.mu.Unlock()
 		return "/tmp/bgstatus-mock", nil
 	})
-	m.Handle("Exec.isRunning", func(json.RawMessage) (any, error) { return false, nil })
+	m.Handle("Exec.isRunning", func(json.RawMessage) (any, error) {
+		return map[string]any{"filename": "/tmp/bgstatus-mock", "running": false}, nil
+	})
+	m.Handle("ShareMgmt.getCandidates", func(json.RawMessage) (any, error) {
+		return []map[string]any{
+			{"uuid": "11111111-aaaa-4aaa-8aaa-111111111111", "description": "/dev/sda1 [EXT4, 760.00 GiB (38%) used, 1.21 TiB available]"},
+			{"uuid": "22222222-bbbb-4bbb-8bbb-222222222222", "description": "/dev/sdb1 [EXT4, 3.61 TiB (93%) used, 300.00 GiB available]"},
+		}, nil
+	})
 	return st
 }
 

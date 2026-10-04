@@ -72,7 +72,7 @@ func TestListJoinsExportsAndResolvesPath(t *testing.T) {
 		t.Fatalf("%+v", list)
 	}
 	s := list[0]
-	if s.Name != "media" || !s.SMB || s.SMBGuest || s.NFS || s.Path != "/srv/dev-disk-by-uuid-1111/media" || s.FilesystemUUID != fsUUID {
+	if s.Name != "media" || !s.SMB || s.SMBGuest || s.NFS || s.Path != "/srv/dev-disk-by-uuid-1111/media" || s.MntEntRef != fsUUID {
 		t.Errorf("%+v", s)
 	}
 }
@@ -92,7 +92,7 @@ func TestListToleratesMissingSMBAndNFS(t *testing.T) {
 
 func TestCreateChainsCallsInOrder(t *testing.T) { // A06.1
 	r := newRig(t)
-	sh, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "docs", FilesystemUUID: fsUUID, SMB: true, SMBGuest: true, Comment: "Documentos"})
+	sh, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "docs", MntEntRef: fsUUID, SMB: true, SMBGuest: true, Comment: "Documentos"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestCreateChainsCallsInOrder(t *testing.T) { // A06.1
 
 func TestCreateWithoutSMBSkipsSMBStep(t *testing.T) {
 	r := newRig(t)
-	if _, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "plain", FilesystemUUID: fsUUID, RelativePath: "data/plain"}); err != nil {
+	if _, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "plain", MntEntRef: fsUUID, RelativePath: "data/plain"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.mutating(); !reflect.DeepEqual(got, []string{"ShareMgmt.set", "Config.applyChangesBg"}) {
@@ -118,7 +118,7 @@ func TestCreateWithoutSMBSkipsSMBStep(t *testing.T) {
 func TestCreateRollsBackWhenSMBFails(t *testing.T) { // A06.2
 	r := newRig(t)
 	r.m.Handle("SMB.setShare", func(json.RawMessage) (any, error) { return nil, &omv.RPCError{Code: 1, Message: "smb broken"} })
-	_, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "docs", FilesystemUUID: fsUUID, SMB: true})
+	_, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "docs", MntEntRef: fsUUID, SMB: true})
 	var se *StepError
 	if !errors.As(err, &se) || !strings.Contains(se.Step, "SMB") {
 		t.Fatalf("want StepError for SMB, got %v", err)
@@ -135,7 +135,7 @@ func TestCreateRollsBackWhenSMBFails(t *testing.T) { // A06.2
 func TestCreateRollsBackWhenApplyFails(t *testing.T) {
 	r := newRig(t)
 	r.m.Handle("Config.applyChangesBg", func(json.RawMessage) (any, error) { return nil, &omv.RPCError{Code: 1, Message: "salt failed"} })
-	_, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "docs", FilesystemUUID: fsUUID, SMB: true})
+	_, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "docs", MntEntRef: fsUUID, SMB: true})
 	var se *StepError
 	if !errors.As(err, &se) || se.Step != "aplicar alterações" {
 		t.Fatalf("%v", err)
@@ -149,16 +149,17 @@ func TestCreateRollsBackWhenApplyFails(t *testing.T) {
 func TestCreateValidationDoesNotCallOMV(t *testing.T) { // A06.3
 	r := newRig(t)
 	bad := []CreateInput{
-		{Name: "", FilesystemUUID: fsUUID},
-		{Name: "has space", FilesystemUUID: fsUUID},
-		{Name: strings.Repeat("a", 33), FilesystemUUID: fsUUID},
-		{Name: "ok", FilesystemUUID: "bad ref!"},
-		{Name: "ok", FilesystemUUID: fsUUID, RelativePath: "../etc"},
-		{Name: "ok", FilesystemUUID: fsUUID, RelativePath: "/abs"},
-		{Name: "ok", FilesystemUUID: fsUUID, RelativePath: "a/../../b"},
-		{Name: "ok", FilesystemUUID: fsUUID, RelativePath: "bad;rm"},
-		{Name: "ok", FilesystemUUID: fsUUID, Comment: "line\nbreak"},
-		{Name: "ok", FilesystemUUID: fsUUID, SMBGuest: true}, // guest without SMB
+		{Name: "", MntEntRef: fsUUID},
+		{Name: "has space", MntEntRef: fsUUID},
+		{Name: strings.Repeat("a", 33), MntEntRef: fsUUID},
+		{Name: "ok", MntEntRef: "bad ref!"},
+		{Name: "ok", MntEntRef: "247A088F7A085FC2"}, // a filesystem uuid is not a mntentref
+		{Name: "ok", MntEntRef: fsUUID, RelativePath: "../etc"},
+		{Name: "ok", MntEntRef: fsUUID, RelativePath: "/abs"},
+		{Name: "ok", MntEntRef: fsUUID, RelativePath: "a/../../b"},
+		{Name: "ok", MntEntRef: fsUUID, RelativePath: "bad;rm"},
+		{Name: "ok", MntEntRef: fsUUID, Comment: "line\nbreak"},
+		{Name: "ok", MntEntRef: fsUUID, SMBGuest: true}, // guest without SMB
 	}
 	for _, in := range bad {
 		_, err := (&Service{}).Create(context.Background(), r.call, in)
@@ -174,7 +175,7 @@ func TestCreateValidationDoesNotCallOMV(t *testing.T) { // A06.3
 
 func TestCreateDuplicateNameIsConflict(t *testing.T) {
 	r := newRig(t)
-	_, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "MEDIA", FilesystemUUID: fsUUID})
+	_, err := (&Service{}).Create(context.Background(), r.call, CreateInput{Name: "MEDIA", MntEntRef: fsUUID})
 	var ce *ConflictError
 	if !errors.As(err, &ce) {
 		t.Fatalf("got %v", err)
@@ -238,7 +239,10 @@ func TestUpdateTogglesSMB(t *testing.T) {
 func TestApplyChangesPollsUntilDone(t *testing.T) {
 	r := newRig(t)
 	polls := 0
-	r.m.Handle("Exec.isRunning", func(json.RawMessage) (any, error) { polls++; return polls < 3, nil })
+	r.m.Handle("Exec.isRunning", func(json.RawMessage) (any, error) {
+		polls++
+		return map[string]any{"filename": "/tmp/x", "running": polls < 3}, nil
+	})
 	if err := omv.ApplyChanges(context.Background(), r.call); err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +259,7 @@ func TestSerialisedMutations(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := svc.Create(context.Background(), r.call, CreateInput{Name: n, FilesystemUUID: fsUUID}); err != nil {
+			if _, err := svc.Create(context.Background(), r.call, CreateInput{Name: n, MntEntRef: fsUUID}); err != nil {
 				t.Errorf("%s: %v", n, err)
 			}
 		}()

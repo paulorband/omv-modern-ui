@@ -26,7 +26,8 @@ export function ShareWizard({ disks, existing, onClose }: { disks: Disk[]; exist
   const qc = useQueryClient()
   const toast = useToast()
   const [step, setStep] = useState<Step>(0)
-  const [fs, setFs] = useState(disks.length === 1 ? disks[0].uuid : '')
+  const eligible = disks.filter((d) => d.mntEntRef)
+  const [fs, setFs] = useState(eligible.length === 1 ? eligible[0].mntEntRef! : '')
   const [name, setName] = useState('')
   const [path, setPath] = useState('')
   const [comment, setComment] = useState('')
@@ -35,11 +36,11 @@ export function ShareWizard({ disks, existing, onClose }: { disks: Disk[]; exist
   const [shown, setShown] = useState(false) // show validation only after the first "Next"
 
   const problem = stepProblem(step, { fs, name, path }, existing)
-  const disk = disks.find((d) => d.uuid === fs)
+  const disk = eligible.find((d) => d.mntEntRef === fs)
 
   const create = useMutation({
     mutationFn: () =>
-      post<Share>('/storage/shares', { name, filesystemUuid: fs, relativePath: path.trim() || name, comment: comment.trim(), smb, smbGuest: smb && guest }),
+      post<Share>('/storage/shares', { name, mntEntRef: fs, relativePath: path.trim() || name, comment: comment.trim(), smb, smbGuest: smb && guest }),
     onSuccess: (s) => {
       toast.ok(`Compartilhamento ${s.name} criado.`)
       void qc.invalidateQueries({ queryKey: ['shares'] })
@@ -87,10 +88,10 @@ export function ShareWizard({ disks, existing, onClose }: { disks: Disk[]; exist
       {step === 0 && (
         <fieldset className="space-y-2">
           <legend className="mb-2 text-sm font-medium">Em qual disco?</legend>
-          {disks.length === 0 && <p className="text-sm text-muted">Nenhum disco montado. Monte um filesystem na interface original do OMV.</p>}
-          {disks.map((d) => (
-            <label key={d.uuid} className={cx('flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm', fs === d.uuid ? 'border-accent bg-accent/10' : 'border-line')}>
-              <input type="radio" name="fs" checked={fs === d.uuid} onChange={() => setFs(d.uuid)} />
+          {eligible.length === 0 && <p className="text-sm text-muted">Nenhum disco montado. Monte um filesystem na interface original do OMV.</p>}
+          {eligible.map((d) => (
+            <label key={d.uuid} className={cx('flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm', fs === d.mntEntRef ? 'border-accent bg-accent/10' : 'border-line')}>
+              <input type="radio" name="fs" checked={fs === d.mntEntRef} onChange={() => setFs(d.mntEntRef!)} />
               <span className="flex-1">
                 <span className="font-medium">{d.label || d.device}</span>
                 <span className="block text-xs text-muted">

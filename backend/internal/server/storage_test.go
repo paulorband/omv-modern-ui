@@ -43,7 +43,7 @@ func TestStorageReadEndpoints(t *testing.T) {
 	h, c, _ := newStorageServer(t)
 	var fs []omv.Filesystem
 	rec := do(h, "GET", "/api/v1/storage/filesystems", "", c, false)
-	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &fs) != nil || len(fs) != 2 || fs[0].UUID != testFS {
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &fs) != nil || len(fs) != 2 || fs[0].MntEntRef != testFS {
 		t.Fatalf("filesystems: %d %s", rec.Code, rec.Body)
 	}
 	var shares []storage.Share
@@ -59,7 +59,7 @@ func TestStorageReadEndpoints(t *testing.T) {
 
 func TestStorageShareLifecycleOverHTTP(t *testing.T) {
 	h, c, _ := newStorageServer(t)
-	body := `{"name":"docs","filesystemUuid":"` + testFS + `","relativePath":"docs","smb":true,"comment":"Meus docs"}`
+	body := `{"name":"docs","mntEntRef":"` + testFS + `","relativePath":"docs","smb":true,"comment":"Meus docs"}`
 	rec := do(h, "POST", "/api/v1/storage/shares", body, c, true)
 	var sh storage.Share
 	if rec.Code != 201 || json.Unmarshal(rec.Body.Bytes(), &sh) != nil || sh.Name != "docs" || !sh.SMB || sh.UUID == "" {
@@ -84,9 +84,9 @@ func TestStorageErrorMapping(t *testing.T) {
 		name, method, path, body string
 		want                     int
 	}{
-		{"invalid name", "POST", "/api/v1/storage/shares", `{"name":"bad name","filesystemUuid":"` + testFS + `"}`, 400},
-		{"traversal", "POST", "/api/v1/storage/shares", `{"name":"x","filesystemUuid":"` + testFS + `","relativePath":"../etc"}`, 400},
-		{"duplicate", "POST", "/api/v1/storage/shares", `{"name":"media","filesystemUuid":"` + testFS + `"}`, 409},
+		{"invalid name", "POST", "/api/v1/storage/shares", `{"name":"bad name","mntEntRef":"` + testFS + `"}`, 400},
+		{"traversal", "POST", "/api/v1/storage/shares", `{"name":"x","mntEntRef":"` + testFS + `","relativePath":"../etc"}`, 400},
+		{"duplicate", "POST", "/api/v1/storage/shares", `{"name":"media","mntEntRef":"` + testFS + `"}`, 409},
 		{"bad json", "POST", "/api/v1/storage/shares", `{`, 400},
 		{"bad uuid", "DELETE", "/api/v1/storage/shares/not-a-uuid", ``, 400},
 		{"patch unknown", "PATCH", "/api/v1/storage/shares/aaaaaaaa-0000-4000-8000-0000000000ff", `{"smb":true}`, 404},
@@ -101,7 +101,7 @@ func TestStorageErrorMapping(t *testing.T) {
 
 	// OMV failing mid-way surfaces as 502 naming the step, and the share is rolled back (A06.2).
 	m.Handle("SMB.setShare", func(json.RawMessage) (any, error) { return nil, &omv.RPCError{Code: 1, Message: "smb broken"} })
-	rec := do(h, "POST", "/api/v1/storage/shares", `{"name":"docs","filesystemUuid":"`+testFS+`","smb":true}`, c, true)
+	rec := do(h, "POST", "/api/v1/storage/shares", `{"name":"docs","mntEntRef":"`+testFS+`","smb":true}`, c, true)
 	if rec.Code != 502 || !strings.Contains(rec.Body.String(), "SMB") {
 		t.Fatalf("step failure: %d %s", rec.Code, rec.Body)
 	}

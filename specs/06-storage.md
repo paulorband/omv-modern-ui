@@ -15,7 +15,7 @@ Toda a integração fica em `internal/omv` (⚠️ a validar contra OMV 7).
 - R06.2 (M) `GET /api/v1/storage/shares`: pastas compartilhadas do OMV (`ShareMgmt.getList`),
   com nome, caminho absoluto resolvido, filesystem, permissões, comentário e serviços ativos
   (SMB, NFS) quando disponíveis.
-- R06.3 (M) `POST /api/v1/storage/shares` cria uma pasta compartilhada: `{ name, filesystemUuid,
+- R06.3 (M) `POST /api/v1/storage/shares` cria uma pasta compartilhada: `{ name, mntEntRef,
   relativePath, comment, smb: bool, smbGuest: bool }`. Fluxo: `ShareMgmt.set` → (se `smb`)
   `SMB.setShare` → `Config.applyChanges`. Validar nome (`^[a-zA-Z0-9_-]{1,32}$`) e caminho relativo
   (sem `..`, sem barra inicial).
@@ -48,3 +48,19 @@ Toda a integração fica em `internal/omv` (⚠️ a validar contra OMV 7).
 - A06.3 Nome inválido → 400 sem chamar o OMV.
 - A06.4 Remover share não toca no filesystem (o código não tem chamada de remoção de diretórios).
 - A06.5 UI: assistente bloqueia avanço com nome inválido e mostra erro do backend.
+
+## Notas validadas contra um OMV real
+
+Confirmado com `omv-rpc` em uma instalação real (Raspberry Pi):
+
+- `FileSystemMgmt.enumerateFilesystems`: `used` vem como **texto** (`"1.67 TiB"`); `size` e `available` são
+  bytes em string. O uso é calculado por `size - available`.
+- O `uuid` de um filesystem nem sempre é um UUID (ex.: NTFS `247A088F7A085FC2`) e **não é** o `mntentref`.
+- O `mntentref` que `ShareMgmt.set` exige vem de `ShareMgmt.getCandidates` (`[{uuid, description}]`), associado ao
+  disco pelo prefixo da descrição (`"/dev/sda1 [NTFS, ...]"` ↔ `canonicaldevicefile`). Por isso a criação de
+  share recebe `mntEntRef` e só oferece discos presentes nessa lista.
+- `ShareMgmt.getList` já traz `absdirpath`; `SMB.getShareList` usa `guest: "allow"`.
+- `Exec.isRunning` responde `{"filename", "running"}`.
+- Login via `/rpc.php` responde `{"status":"authenticated","sessionid":...}` (e não `authenticated: true`).
+
+Ainda não testado em uma instalação real: `ShareMgmt.set`, `SMB.setShare` e as chamadas de remoção.

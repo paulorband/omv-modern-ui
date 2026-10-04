@@ -8,11 +8,11 @@ import type { Disk, Share } from '../lib/types'
 
 const GIB = 1024 ** 3
 const DISKS: Disk[] = [
-  { uuid: '11111111-aaaa-4aaa-8aaa-111111111111', device: '/dev/sda1', label: 'data', type: 'ext4', mountPoint: '/srv/dev-disk-by-uuid-1111', total: 2000 * GIB, used: 760 * GIB, free: 1240 * GIB, percent: 38 },
-  { uuid: '22222222-bbbb-4bbb-8bbb-222222222222', device: '/dev/sdb1', label: 'backup', type: 'ext4', mountPoint: '/srv/dev-disk-by-uuid-2222', total: 4000 * GIB, used: 3700 * GIB, free: 300 * GIB, percent: 92.5 },
+  { uuid: 'd1f5c3a0', mntEntRef: '11111111-aaaa-4aaa-8aaa-111111111111', device: '/dev/sda1', label: 'data', type: 'ext4', mountPoint: '/srv/dev-disk-by-uuid-1111', total: 2000 * GIB, used: 760 * GIB, free: 1240 * GIB, percent: 38 },
+  { uuid: 'd1f5c3b0', mntEntRef: '22222222-bbbb-4bbb-8bbb-222222222222', device: '/dev/sdb1', label: 'backup', type: 'ext4', mountPoint: '/srv/dev-disk-by-uuid-2222', total: 4000 * GIB, used: 3700 * GIB, free: 300 * GIB, percent: 92.5 },
 ]
 const SHARES: Share[] = [
-  { uuid: 'aaaaaaaa-0000-4000-8000-000000000001', name: 'media', path: '/srv/dev-disk-by-uuid-1111/media', filesystemUuid: DISKS[0].uuid, comment: 'Filmes', smb: true, smbGuest: false, nfs: false },
+  { uuid: 'aaaaaaaa-0000-4000-8000-000000000001', name: 'media', path: '/srv/dev-disk-by-uuid-1111/media', mntEntRef: 'aaaa1111-0000-4000-8000-000000000001', comment: 'Filmes', smb: true, smbGuest: false, nfs: false },
 ]
 const base = [
   { path: '/storage/filesystems', body: DISKS },
@@ -100,7 +100,7 @@ describe('Storage page', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Criar compartilhamento' }))
     await waitFor(() => expect(calls.find((c) => c.method === 'POST')).toBeDefined())
     expect(calls.find((c) => c.method === 'POST')!.body).toEqual({
-      name: 'docs', filesystemUuid: DISKS[0].uuid, relativePath: 'docs', comment: '', smb: true, smbGuest: true,
+      name: 'docs', mntEntRef: DISKS[0].mntEntRef, relativePath: 'docs', comment: '', smb: true, smbGuest: true,
     })
   })
 
@@ -116,5 +116,24 @@ describe('Storage page', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Continuar' }))
     await user.click(within(dialog).getByRole('button', { name: 'Criar compartilhamento' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('criar compartilhamento SMB')
+  })
+})
+
+describe('share location (real OMV behaviour)', () => {
+  it('only offers disks that OMV can host shares on', async () => {
+    const boot: Disk = { uuid: 'EACA-13DA', device: '/dev/mmcblk0p1', label: 'bootfs', type: 'vfat', mountPoint: '/boot/firmware', total: GIB, used: 1, free: GIB, percent: 15 } // no mntEntRef
+    mockApi([{ path: '/storage/filesystems', body: [DISKS[0], boot] }, { path: '/storage/shares', body: [] }])
+    renderApp(<Storage />)
+    await userEvent.setup().click(await screen.findByRole('button', { name: /Novo compartilhamento/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Novo compartilhamento' })
+    expect(within(dialog).getAllByRole('radio')).toHaveLength(1)
+    expect(within(dialog).queryByText('bootfs')).not.toBeInTheDocument()
+  })
+
+  it('disables share creation when no disk is eligible', async () => {
+    mockApi([{ path: '/storage/filesystems', body: [{ ...DISKS[0], mntEntRef: undefined }] }, { path: '/storage/shares', body: [] }])
+    renderApp(<Storage />)
+    await screen.findByText('data')
+    expect(screen.getByRole('button', { name: /Novo compartilhamento/ })).toBeDisabled()
   })
 })

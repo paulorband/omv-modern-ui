@@ -28,10 +28,10 @@ func fakeOMV(t *testing.T) *httptest.Server {
 				_, _ = w.Write([]byte(`{"response":null,"error":{"code":5000,"message":"Incorrect username or password."}}`))
 				return
 			}
-			http.SetCookie(w, &http.Cookie{Name: "PHPSESSID", Value: "abc123"})
-			_, _ = w.Write([]byte(`{"response":{"authenticated":true,"username":"admin","permissions":{"role":"admin"}},"error":null}`))
+			http.SetCookie(w, &http.Cookie{Name: "X-OPENMEDIAVAULT-SESSIONID", Value: "abc123"})
+			_, _ = w.Write([]byte(`{"response":{"username":"admin","status":"authenticated","permissions":{"role":"admin"},"sessionid":"abc123"},"error":null}`))
 		case "Test.echo":
-			if c, err := r.Cookie("PHPSESSID"); err != nil || c.Value != "abc123" {
+			if c, err := r.Cookie("X-OPENMEDIAVAULT-SESSIONID"); err != nil || c.Value != "abc123" {
 				_, _ = w.Write([]byte(`{"response":null,"error":{"code":5001,"message":"Session expired."}}`))
 				return
 			}
@@ -69,7 +69,7 @@ func TestRPCClientLoginAndCall(t *testing.T) {
 	if err := c.Call(ctx, s, "Test", "boom", nil, nil); !errors.As(err, &rpcErr) || rpcErr.Message != "kaboom" {
 		t.Fatalf("boom: %v", err)
 	}
-	if err := c.Call(ctx, &Session{ID: "stale"}, "Test", "echo", nil, nil); !errors.Is(err, ErrSessionExpired) {
+	if err := c.Call(ctx, &Session{ID: "stale", Cookies: []*http.Cookie{{Name: "X-OPENMEDIAVAULT-SESSIONID", Value: "stale"}}}, "Test", "echo", nil, nil); !errors.Is(err, ErrSessionExpired) {
 		t.Fatalf("stale session: %v", err)
 	}
 }

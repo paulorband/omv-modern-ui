@@ -31,6 +31,8 @@ export type Disk = {
   used: number
   free: number
   percent: number
+  /** Mount-entry id needed to create shares there; absent when OMV does not offer the disk. */
+  mntEntRef?: string
 }
 
 export type Port = { private: number; public: number; protocol: string }
@@ -136,7 +138,7 @@ export type Share = {
   uuid: string
   name: string
   path: string
-  filesystemUuid: string
+  mntEntRef: string
   comment: string
   smb: boolean
   smbGuest: boolean

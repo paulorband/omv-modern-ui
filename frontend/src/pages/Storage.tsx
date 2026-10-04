@@ -24,7 +24,7 @@ export function Storage() {
             <a href={omvUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-surface-2 px-3.5 py-2 text-sm font-medium hover:bg-line">
               <ExternalLink className="h-4 w-4" aria-hidden /> Configurações avançadas
             </a>
-            <Button variant="primary" onClick={() => setCreating(true)} disabled={!disks.data?.length}>
+            <Button variant="primary" onClick={() => setCreating(true)} disabled={!disks.data?.some((d) => d.mntEntRef)}>
               <Plus className="h-4 w-4" aria-hidden /> Novo compartilhamento
             </Button>
           </>

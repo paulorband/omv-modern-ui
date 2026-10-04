@@ -38,7 +38,7 @@ func (d Deps) registerStorage(api *http.ServeMux, protect func(http.Handler) htt
 	h := func(fn httpx.Handler) http.Handler { return protect(fn) }
 
 	api.Handle("GET /storage/filesystems", h(func(w http.ResponseWriter, r *http.Request) error {
-		fs, err := omv.ListFilesystems(r.Context(), d.omvCaller(r))
+		fs, err := omv.ListFilesystemsWithRefs(r.Context(), d.omvCaller(r))
 		if err != nil {
 			return err
 		}

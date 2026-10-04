@@ -6,10 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 )
 
-// Session is an authenticated OMV session owned by one user (the PHPSESSID cookie value).
+// Session is an authenticated OMV session owned by one user.
 type Session struct {
+	// Cookies are the session cookies OMV set at login, replayed on every call.
+	Cookies  []*http.Cookie
 	ID       string
 	Username string
 	Role     string
