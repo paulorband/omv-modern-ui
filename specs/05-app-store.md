@@ -33,7 +33,9 @@ services:
     restart: unless-stopped
 ```
 
-Variáveis reservadas, preenchidas pelo sistema: `APPDATA` (= `APPDATA_DIR/<id>`), `PUID`, `PGID`,
+Variáveis reservadas, preenchidas pelo sistema: `APPDATA` (= `APPDATA_DIR/<id>`), `PORT` (porta do host
+escolhida na instalação; templates devem usar `${PORT:-<padrão>}`), `PUID` (padrão 1000), `PGID` (padrão 100,
+grupo `users` do OMV), configuráveis por `OMVHOME_PUID/PGID/TZ`,
 `TZ`. Tipos de campo: `string`, `path`, `port`, `password`, `bool`, `select` (com `options`).
 
 ## Requisitos
@@ -53,7 +55,8 @@ Variáveis reservadas, preenchidas pelo sistema: `APPDATA` (= `APPDATA_DIR/<id>`
 - R05.6 (M) Campos `path` devem ser absolutos, sem `..`; o diretório é criado se não existir.
 - R05.7 (M) `POST /api/v1/store/custom` instala um compose colado pelo usuário: `{ "name": "...",
   "compose": "yaml", "mainService": "...", "port": 8080 }`. O sistema valida o YAML, rejeita
-  `privileged: true` e `network_mode: host` sem `allowUnsafe: true` e injeta labels.
+  `privileged: true`, `network_mode: host`, `pid: host` e montagens de `docker.sock` ou `/` sem
+  `allowUnsafe: true`, e injeta labels.
 - R05.8 (S) `OMVHOME_CATALOG_URL` aponta para um `index.json` (lista de templates); falha de
   rede não derruba o catálogo embutido, apenas registra aviso.
 - R05.9 (M) Frontend, **Loja**: grade de cards com busca e categorias; página de detalhes com

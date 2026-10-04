@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -15,6 +16,9 @@ type Config struct {
 	AppDataDir   string
 	CatalogURL   string
 	Mock         bool
+	PUID         string
+	PGID         string
+	TZ           string
 }
 
 // Load reads OMVHOME_* variables, applying the defaults documented in SPEC-00.
@@ -28,6 +32,9 @@ func Load() Config {
 		AppDataDir:   env("OMVHOME_APPDATA_DIR", filepath.Join(dataDir, "appdata")),
 		CatalogURL:   env("OMVHOME_CATALOG_URL", ""),
 		Mock:         envBool("OMVHOME_MOCK", false),
+		PUID:         env("OMVHOME_PUID", "1000"),
+		PGID:         env("OMVHOME_PGID", "100"),
+		TZ:           env("OMVHOME_TZ", systemTimezone()),
 	}
 }
 
@@ -44,4 +51,17 @@ func envBool(key string, def bool) bool {
 		return def
 	}
 	return v
+}
+
+// systemTimezone returns $TZ, then /etc/timezone, then UTC.
+func systemTimezone() string {
+	if tz := os.Getenv("TZ"); tz != "" {
+		return tz
+	}
+	if b, err := os.ReadFile("/etc/timezone"); err == nil {
+		if tz := strings.TrimSpace(string(b)); tz != "" {
+			return tz
+		}
+	}
+	return "UTC"
 }

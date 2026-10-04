@@ -1,0 +1,26 @@
+name: pihole
+x-omvhome:
+  id: pihole
+  title: Pi-hole
+  tagline: Bloqueio de anúncios na rede inteira
+  description: Servidor DNS que bloqueia anúncios e rastreadores para todos os dispositivos da casa. Usa a porta 53 do host; libere-a se o systemd-resolved estiver ocupando.
+  icon: "emoji:🛡️"
+  category: Network
+  port: 8081
+  main: pihole
+  env:
+    - { key: WEBPASSWORD, label: Senha do painel, type: password, required: true }
+services:
+  pihole:
+    image: pihole/pihole:latest
+    ports:
+      - "${PORT:-8081}:80"
+      - "53:53/tcp"
+      - "53:53/udp"
+    environment:
+      TZ: ${TZ}
+      WEBPASSWORD: ${WEBPASSWORD}
+    volumes:
+      - ${APPDATA}/etc-pihole:/etc/pihole
+      - ${APPDATA}/etc-dnsmasq.d:/etc/dnsmasq.d
+    restart: unless-stopped

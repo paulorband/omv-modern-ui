@@ -1,0 +1,23 @@
+name: nextcloud
+x-omvhome:
+  id: nextcloud
+  title: Nextcloud
+  tagline: Sua nuvem pessoal de arquivos
+  description: Arquivos, contatos e calendário na sua própria nuvem. Esta instalação simples usa SQLite, adequada para uso doméstico leve.
+  icon: "emoji:☁️"
+  category: Files
+  port: 8084
+  main: nextcloud
+  env:
+    - { key: NEXTCLOUD_ADMIN_USER, label: Usuário administrador, type: string, default: admin, required: true }
+    - { key: NEXTCLOUD_ADMIN_PASSWORD, label: Senha do administrador, type: password, required: true }
+services:
+  nextcloud:
+    image: nextcloud:stable
+    environment:
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+    ports: ["${PORT:-8084}:80"]
+    volumes:
+      - ${APPDATA}/html:/var/www/html
+    restart: unless-stopped

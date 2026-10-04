@@ -1,0 +1,28 @@
+name: qbittorrent
+x-omvhome:
+  id: qbittorrent
+  title: qBittorrent
+  tagline: Cliente BitTorrent com interface web
+  description: Cliente de torrents leve e completo, controlado pelo navegador.
+  icon: "emoji:⬇️"
+  category: Downloads
+  port: 8083
+  main: qbittorrent
+  env:
+    - { key: DOWNLOADS_DIR, label: Pasta de downloads, type: path, default: /srv/downloads, required: true }
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      WEBUI_PORT: "8080"
+    ports:
+      - "${PORT:-8083}:8080"
+      - "6881:6881/tcp"
+      - "6881:6881/udp"
+    volumes:
+      - ${APPDATA}/config:/config
+      - ${DOWNLOADS_DIR}:/downloads
+    restart: unless-stopped

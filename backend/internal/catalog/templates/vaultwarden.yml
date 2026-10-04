@@ -1,0 +1,19 @@
+name: vaultwarden
+x-omvhome:
+  id: vaultwarden
+  title: Vaultwarden
+  tagline: Gerenciador de senhas compatível com Bitwarden
+  description: Servidor leve e auto-hospedado compatível com os aplicativos e extensões do Bitwarden. Use HTTPS (proxy reverso) para acessar fora de casa.
+  icon: "emoji:🔐"
+  category: Security
+  port: 8082
+  main: vaultwarden
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    ports: ["${PORT:-8082}:80"]
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/data:/data
+    restart: unless-stopped

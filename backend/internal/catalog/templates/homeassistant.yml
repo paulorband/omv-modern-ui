@@ -1,0 +1,19 @@
+name: homeassistant
+x-omvhome:
+  id: homeassistant
+  title: Home Assistant
+  tagline: Automação residencial local
+  description: Controle e automatize luzes, sensores e dispositivos da casa. Esta versão usa rede bridge; a descoberta automática de dispositivos pode exigir rede host (instale como app personalizado).
+  icon: "emoji:🏠"
+  category: Home
+  port: 8123
+  main: homeassistant
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    environment:
+      TZ: ${TZ}
+    ports: ["${PORT:-8123}:8123"]
+    volumes:
+      - ${APPDATA}/config:/config
+    restart: unless-stopped

@@ -1,0 +1,27 @@
+name: syncthing
+x-omvhome:
+  id: syncthing
+  title: Syncthing
+  tagline: Sincronização contínua de arquivos entre dispositivos
+  description: Sincronize pastas entre computadores e celulares diretamente, sem nuvem de terceiros.
+  icon: "emoji:🔄"
+  category: Files
+  port: 8384
+  main: syncthing
+  env:
+    - { key: SYNC_DIR, label: Pasta a sincronizar, type: path, default: /srv/sync, required: true }
+services:
+  syncthing:
+    image: syncthing/syncthing:latest
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+    ports:
+      - "${PORT:-8384}:8384"
+      - "22000:22000/tcp"
+      - "22000:22000/udp"
+      - "21027:21027/udp"
+    volumes:
+      - ${APPDATA}/config:/var/syncthing/config
+      - ${SYNC_DIR}:/var/syncthing/Sync
+    restart: unless-stopped

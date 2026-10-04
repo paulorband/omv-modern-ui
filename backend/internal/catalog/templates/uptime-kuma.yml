@@ -1,0 +1,17 @@
+name: uptime-kuma
+x-omvhome:
+  id: uptime-kuma
+  title: Uptime Kuma
+  tagline: Monitoramento de serviços e sites
+  description: Painel bonito para monitorar sites, portas e serviços, com alertas por e-mail, Telegram e outros.
+  icon: "emoji:📈"
+  category: Monitoring
+  port: 3001
+  main: uptime-kuma
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    ports: ["${PORT:-3001}:3001"]
+    volumes:
+      - ${APPDATA}/data:/app/data
+    restart: unless-stopped

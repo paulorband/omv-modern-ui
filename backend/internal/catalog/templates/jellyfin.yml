@@ -1,0 +1,24 @@
+name: jellyfin
+x-omvhome:
+  id: jellyfin
+  title: Jellyfin
+  tagline: Servidor de mídia livre
+  description: Faça streaming dos seus filmes, séries, músicas e fotos para qualquer dispositivo, sem assinatura e sem telemetria.
+  icon: "emoji:🎬"
+  category: Media
+  port: 8096
+  main: jellyfin
+  env:
+    - { key: MEDIA_DIR, label: Pasta de mídia, type: path, default: /srv/media, required: true }
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    user: "${PUID}:${PGID}"
+    ports: ["${PORT:-8096}:8096"]
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ${APPDATA}/config:/config
+      - ${APPDATA}/cache:/cache
+      - ${MEDIA_DIR}:/media
+    restart: unless-stopped
