@@ -2,9 +2,9 @@ const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 
 export function formatBytes(n: number, digits = 1): string {
   if (!Number.isFinite(n) || n <= 0) return '0 B'
-  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), UNITS.length - 1)
+  const i = Math.max(0, Math.min(Math.floor(Math.log(n) / Math.log(1024)), UNITS.length - 1))
   const v = n / 1024 ** i
-  return `${i === 0 ? v : v.toFixed(digits)} ${UNITS[i]}`
+  return `${i === 0 ? Math.round(v) : v.toFixed(digits)} ${UNITS[i]}`
 }
 
 export function formatUptime(seconds: number): string {

@@ -10,6 +10,8 @@ describe('format', () => {
     expect(formatBytes(1536)).toBe('1.5 KB')
     expect(formatBytes(5 * 1024 ** 3)).toBe('5.0 GB')
     expect(formatBytes(-1)).toBe('0 B')
+    expect(formatBytes(137.06853426713357)).toBe('137 B')
+    expect(formatBytes(0.4)).toBe('0 B')
   })
 
   it('formats uptime', () => {
