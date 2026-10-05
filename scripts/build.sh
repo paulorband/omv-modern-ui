@@ -6,7 +6,13 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "==> frontend"
-(cd "$root/frontend" && npm ci && npm run build)
+# `npm ci` wipes node_modules, which fails on Windows while a dev server/editor holds native files open.
+# Only do a clean install when there is nothing installed yet; otherwise a plain install is enough.
+(
+  cd "$root/frontend"
+  if [ -d node_modules ]; then npm install --no-audit --no-fund; else npm ci; fi
+  npm run build
+)
 
 echo "==> embed"
 dist="$root/backend/internal/web/dist"
