@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	"omvhome/internal/catalog"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -73,52 +75,6 @@ func injectLabels(raw string, main string, labels map[string]string) ([]byte, er
 	return buf.Bytes(), nil
 }
 
-// unsafeReasons lists risky settings in a compose document (R05.7).
-func unsafeReasons(raw string) ([]string, error) {
-	var doc struct {
-		Services map[string]map[string]any `yaml:"services"`
-	}
-	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
-		return nil, fmt.Errorf("YAML inválido: %w", err)
-	}
-	if len(doc.Services) == 0 {
-		return nil, fmt.Errorf("o compose precisa ter ao menos um serviço em `services`")
-	}
-	names := make([]string, 0, len(doc.Services))
-	for n := range doc.Services {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	var out []string
-	for _, n := range names {
-		svc := doc.Services[n]
-		if p, _ := svc["privileged"].(bool); p {
-			out = append(out, n+": privileged: true")
-		}
-		if nm, _ := svc["network_mode"].(string); nm == "host" {
-			out = append(out, n+": network_mode: host")
-		}
-		if pid, _ := svc["pid"].(string); pid == "host" {
-			out = append(out, n+": pid: host")
-		}
-		if vols, ok := svc["volumes"].([]any); ok {
-			for _, v := range vols {
-				src := ""
-				switch vv := v.(type) {
-				case string:
-					src, _, _ = strings.Cut(vv, ":")
-				case map[string]any:
-					src, _ = vv["source"].(string)
-				}
-				if strings.Contains(src, "docker.sock") || src == "/" {
-					out = append(out, n+": volume "+src)
-				}
-			}
-		}
-	}
-	return out, nil
-}
-
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
 
 // slugify converts a display name to an app id.
@@ -148,3 +104,6 @@ func serviceNames(raw string) ([]string, error) {
 	sort.Strings(names)
 	return names, nil
 }
+
+// unsafeReasons lists risky settings in a compose document (R05.7).
+func unsafeReasons(raw string) ([]string, error) { return catalog.UnsafeReasons(raw) }

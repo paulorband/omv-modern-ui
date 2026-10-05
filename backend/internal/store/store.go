@@ -3,6 +3,8 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -70,8 +72,9 @@ func tcpPortBusy(port int) bool {
 }
 
 type InstallRequest struct {
-	Env  map[string]string `json:"env"`
-	Port int               `json:"port"`
+	Env         map[string]string `json:"env"`
+	Port        int               `json:"port"`
+	AllowUnsafe bool              `json:"allowUnsafe"`
 }
 
 type CustomRequest struct {
@@ -109,6 +112,12 @@ func (i *Installer) Install(ctx context.Context, id string, req InstallRequest) 
 	if err != nil {
 		return nil, err
 	}
+	if t.Unsupported != "" {
+		return nil, invalid("app incompatível: %s", t.Unsupported)
+	}
+	if len(t.Unsafe) > 0 && !req.AllowUnsafe {
+		return nil, invalid("configurações inseguras exigem allowUnsafe: %s", strings.Join(t.Unsafe, "; "))
+	}
 	vars, paths, ports, err := resolveFields(t.Meta, req.Env)
 	if err != nil {
 		return nil, err
@@ -123,7 +132,7 @@ func (i *Installer) Install(ctx context.Context, id string, req InstallRequest) 
 	if hostPort > 0 {
 		ports = append([]int{hostPort}, ports...)
 	}
-	return i.start(ctx, plan{meta: t.Meta, composeRaw: t.Compose, fieldVars: vars, paths: paths, ports: ports, hostPort: hostPort})
+	return i.start(ctx, plan{meta: t.Meta, composeRaw: t.Compose, fieldVars: vars, paths: paths, ports: ports, hostPort: hostPort, generate: t.Generate})
 }
 
 // InstallCustom installs a user-supplied compose file (R05.7).
@@ -183,6 +192,7 @@ type plan struct {
 	paths      []string
 	ports      []int
 	hostPort   int
+	generate   []string // variables filled with random secrets (SPEC-09)
 }
 
 func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
@@ -220,6 +230,12 @@ func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
 	if p.hostPort > 0 {
 		labels[docker.LabelPort] = strconv.Itoa(p.hostPort)
 	}
+	if p.meta.Scheme != "" {
+		labels[docker.LabelScheme] = p.meta.Scheme
+	}
+	if p.meta.Path != "" {
+		labels[docker.LabelPath] = p.meta.Path
+	}
 	rendered, err := injectLabels(p.composeRaw, p.meta.Main, labels)
 	if err != nil {
 		return nil, invalid("%s", err.Error())
@@ -230,6 +246,13 @@ func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
 		vars = append(vars, envKV{"PORT", strconv.Itoa(p.hostPort)})
 	}
 	vars = append(vars, p.fieldVars...)
+	for _, key := range p.generate {
+		secret, err := randomHex(32)
+		if err != nil {
+			return nil, err
+		}
+		vars = append(vars, envKV{key, secret})
+	}
 
 	// 3. write project files and data folders
 	dir := i.Apps.ProjectDir(id)
@@ -361,4 +384,12 @@ func resolveFields(m catalog.Meta, in map[string]string) (vars []envKV, paths []
 		vars = append(vars, envKV{f.Key, v})
 	}
 	return vars, paths, ports, nil
+}
+
+func randomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }

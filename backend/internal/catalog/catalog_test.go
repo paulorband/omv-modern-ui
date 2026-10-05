@@ -69,13 +69,13 @@ func TestEmbeddedCatalogHasRequiredApps(t *testing.T) { // R05.10
 func TestListFilters(t *testing.T) {
 	c, _ := New("")
 	ctx := context.Background()
-	if all := c.List(ctx, "", ""); len(all) < 8 || all[0].Title > all[1].Title {
+	if all := c.List(ctx, "", "", ""); len(all) < 8 || all[0].Title > all[1].Title {
 		t.Fatalf("list: %d (sorted by title expected)", len(all))
 	}
-	if got := c.List(ctx, "JELLY", ""); len(got) != 1 || got[0].ID != "jellyfin" {
+	if got := c.List(ctx, "JELLY", "", ""); len(got) != 1 || got[0].ID != "jellyfin" {
 		t.Errorf("query: %+v", got)
 	}
-	for _, s := range c.List(ctx, "", "files") {
+	for _, s := range c.List(ctx, "", "files", "") {
 		if !strings.EqualFold(s.Category, "Files") {
 			t.Errorf("category filter leaked %+v", s)
 		}
@@ -106,7 +106,7 @@ func TestRemoteCatalogMergesAndSurvivesFailures(t *testing.T) { // R05.8
 
 	srv.Close() // remote now unreachable
 	c2, _ := New(srv.URL + "/index.json")
-	if got := c2.List(ctx, "", ""); len(got) < 8 {
+	if got := c2.List(ctx, "", "", ""); len(got) < 8 {
 		t.Fatalf("embedded catalog must survive a dead remote, got %d", len(got))
 	}
 }

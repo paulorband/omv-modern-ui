@@ -51,13 +51,24 @@ type Meta struct {
 	Category    string     `yaml:"category" json:"category"`
 	Port        int        `yaml:"port" json:"port"`
 	Main        string     `yaml:"main" json:"main"`
+	Scheme      string     `yaml:"scheme,omitempty" json:"scheme,omitempty"`
+	Path        string     `yaml:"path,omitempty" json:"path,omitempty"`
 	Env         []EnvField `yaml:"env" json:"env"`
 }
 
 // Template is a parsed app template; Compose holds the original YAML.
+//
+// Templates that come from a custom source (SPEC-09) also carry where they came from, why they
+// cannot be installed (Unsupported), risky settings (Unsafe, Warnings) and the variables the
+// installer must generate (Generate).
 type Template struct {
-	Meta    Meta   `json:"meta"`
-	Compose string `json:"compose"`
+	Meta        Meta     `json:"meta"`
+	Compose     string   `json:"compose"`
+	Source      string   `json:"source,omitempty"`
+	Unsupported string   `json:"unsupported,omitempty"`
+	Unsafe      []string `json:"unsafe,omitempty"`
+	Warnings    []string `json:"warnings,omitempty"`
+	Generate    []string `json:"-"`
 }
 
 // Summary is one catalog card.
@@ -67,6 +78,9 @@ type Summary struct {
 	Tagline  string `json:"tagline"`
 	Icon     string `json:"icon"`
 	Category string `json:"category"`
+	// Source is the custom source id ("" for built-in and remote-index apps).
+	Source      string `json:"source,omitempty"`
+	Unsupported bool   `json:"unsupported,omitempty"`
 }
 
 // Parse validates and parses a template (A05.1).
@@ -123,11 +137,18 @@ type Catalog struct {
 	remote    map[string]*Template
 	fetchedAt time.Time
 	now       func() time.Time
+
+	// custom sources (SPEC-09)
+	zipClient  *http.Client
+	smu        sync.RWMutex
+	sdir       string
+	sources    []*sourceState
+	sourceApps map[string]*Template
 }
 
 // New loads the embedded templates; remoteURL (may be empty) points to an index.json.
 func New(remoteURL string) (*Catalog, error) {
-	c := &Catalog{embedded: map[string]*Template{}, remoteURL: remoteURL, hc: &http.Client{Timeout: 10 * time.Second}, now: time.Now}
+	c := &Catalog{embedded: map[string]*Template{}, remoteURL: remoteURL, hc: &http.Client{Timeout: 10 * time.Second}, zipClient: &http.Client{Timeout: 2 * time.Minute}, now: time.Now}
 	entries, err := embedded.ReadDir("templates")
 	if err != nil {
 		return nil, err
@@ -148,7 +169,7 @@ func New(remoteURL string) (*Catalog, error) {
 
 // all merges embedded and remote (embedded wins on id clashes).
 func (c *Catalog) all(ctx context.Context) map[string]*Template {
-	out := map[string]*Template{}
+	out := c.sourceTemplates()
 	for id, t := range c.remoteTemplates(ctx) {
 		out[id] = t
 	}
@@ -223,18 +244,21 @@ func (c *Catalog) fetchRemote(ctx context.Context) (map[string]*Template, error)
 }
 
 // List returns summaries filtered by a case-insensitive query and/or category, sorted by title.
-func (c *Catalog) List(ctx context.Context, q, category string) []Summary {
+func (c *Catalog) List(ctx context.Context, q, category, source string) []Summary {
 	q = strings.ToLower(strings.TrimSpace(q))
 	out := []Summary{}
 	for _, t := range c.all(ctx) {
 		m := t.Meta
+		if source != "" && !(source == BuiltinSource && t.Source == "") && t.Source != source {
+			continue
+		}
 		if category != "" && !strings.EqualFold(m.Category, category) {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(m.Title+" "+m.Tagline+" "+m.ID), q) {
 			continue
 		}
-		out = append(out, Summary{ID: m.ID, Title: m.Title, Tagline: m.Tagline, Icon: m.Icon, Category: m.Category})
+		out = append(out, Summary{ID: m.ID, Title: m.Title, Tagline: m.Tagline, Icon: m.Icon, Category: m.Category, Source: t.Source, Unsupported: t.Unsupported != ""})
 	}
 	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Title) < strings.ToLower(out[j].Title) })
 	return out
@@ -250,3 +274,6 @@ func (c *Catalog) Get(ctx context.Context, id string) (*Template, error) {
 
 // ReservedVars are filled by the system and cannot be used as template field keys.
 var ReservedVars = map[string]bool{"APPDATA": true, "PUID": true, "PGID": true, "TZ": true, "PORT": true}
+
+// BuiltinSource is the pseudo source id used to filter the embedded catalog.
+const BuiltinSource = "builtin"

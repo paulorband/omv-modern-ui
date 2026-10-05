@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -40,6 +41,11 @@ func buildDeps(cfg config.Config) server.Deps {
 	cat, err := catalog.New(cfg.CatalogURL)
 	if err != nil {
 		log.Fatalf("catálogo embutido inválido: %v", err) // a build with a broken template must not start
+	}
+	if err := cat.UseDir(cfg.DataDir); err != nil {
+		log.Printf("fontes de apps desativadas: %v", err) // a bad sources folder must not stop the server
+	} else {
+		go cat.RefreshStale(context.Background(), 24*time.Hour)
 	}
 	appSvc := &apps.Service{Docker: dockerClient, Compose: composeRun, DataDir: cfg.DataDir, AppDataDir: cfg.AppDataDir}
 

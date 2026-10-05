@@ -52,6 +52,7 @@ func New(d Deps) http.Handler {
 	d.registerContainers(api, protect)
 	d.registerApps(api, protect)
 	d.registerStore(api, protect)
+	d.registerSources(api, protect)
 	d.registerStorage(api, protect)
 
 	api.Handle("/", httpx.Handler(func(http.ResponseWriter, *http.Request) error {
