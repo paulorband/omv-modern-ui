@@ -337,3 +337,121 @@ func TestSlugify(t *testing.T) {
 		}
 	}
 }
+
+func TestAppDataOwners(t *testing.T) { // A09.9
+	app := filepath.Join(t.TempDir(), "x")
+	yml := `services:
+  web:
+    image: a
+    user: "1000:1000"
+    volumes:
+      - ${APPDATA}/data:/data
+      - $APPDATA/cache:/cache:ro
+      - ${APPDATA}/conf.json:/conf.json
+      - /srv/media:/media
+      - ${APPDATA}/../escape:/e
+      - type: bind
+        source: ${APPDATA}/maps
+        target: /maps
+      - named:/vol
+  db:
+    image: b
+    user: 999
+    volumes:
+      - ${APPDATA}/db:/var/lib/db
+      - ${APPDATA}/data:/dup
+  proxy:
+    image: c
+    user: nginx
+    volumes:
+      - ${APPDATA}/proxy:/p
+  plain:
+    image: d
+    volumes:
+      - ${APPDATA}/plain:/p
+`
+	got := map[string][2]int{}
+	for _, o := range appDataOwners([]byte(yml), app) {
+		got[o.path] = [2]int{o.uid, o.gid}
+	}
+	j := func(p string) string { return filepath.Join(app, p) }
+	want := map[string][2]int{
+		j("cache"): {1000, 1000}, j("conf.json"): {1000, 1000}, j("data"): {999, -1}, j("db"): {999, -1}, j("maps"): {1000, 1000},
+	}
+	// "data" is claimed by both web and db: the first service by name (db) wins.
+	if len(got) != len(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	for p, w := range want {
+		if got[p] != w {
+			t.Errorf("%s: got %v want %v", p, got[p], w)
+		}
+	}
+}
+
+func TestParseUser(t *testing.T) {
+	for in, want := range map[any][3]int{"1000": {1000, -1, 1}, "1000:100": {1000, 100, 1}, 33: {33, -1, 1}, "1000:users": {1000, -1, 1}, "www-data": {0, 0, 0}, "": {0, 0, 0}, nil: {0, 0, 0}, "-1": {0, 0, 0}} {
+		uid, gid, ok := parseUser(in)
+		if !ok && want[2] == 1 || ok && (want[2] == 0 || uid != want[0] || gid != want[1]) {
+			t.Errorf("%v → %d %d %v", in, uid, gid, ok)
+		}
+	}
+}
+
+func TestInstallHandsDataFoldersToContainerUser(t *testing.T) { // A09.9
+	h, _ := newHarness(t)
+	type chown struct {
+		path     string
+		uid, gid int
+	}
+	var chowns []chown
+	h.inst.Chown = func(p string, uid, gid int) error { chowns = append(chowns, chown{p, uid, gid}); return nil }
+	// make the folders real so the recursive walk has something to visit
+	h.inst.MkdirAll = func(p string) error { h.mkdirs = append(h.mkdirs, p); return os.MkdirAll(p, 0o755) }
+
+	yml := "services:\n  app:\n    image: nginx\n    user: '1000:1000'\n    volumes:\n      - ${APPDATA}/data/nested:/data\n"
+	job, err := h.inst.InstallCustom(context.Background(), CustomRequest{Name: "Owned App", Compose: yml})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait(t, job)
+
+	data := filepath.Join(h.inst.Apps.AppDataDir, "owned-app", "data", "nested")
+	found := false
+	for _, m := range h.mkdirs {
+		found = found || m == data
+	}
+	if !found {
+		t.Errorf("data folder not pre-created (Docker would create it as root): %v", h.mkdirs)
+	}
+	if len(chowns) == 0 || chowns[0] != (chown{data, 1000, 1000}) {
+		t.Errorf("chowns: %+v", chowns)
+	}
+}
+
+func TestInstallWithoutNumericUserDoesNotChown(t *testing.T) {
+	h, _ := newHarness(t)
+	called := false
+	h.inst.Chown = func(string, int, int) error { called = true; return nil }
+	yml := "services:\n  app:\n    image: nginx\n    volumes:\n      - ${APPDATA}/data:/data\n"
+	job, err := h.inst.InstallCustom(context.Background(), CustomRequest{Name: "Plain App", Compose: yml})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait(t, job)
+	if called {
+		t.Error("built-in style apps (no numeric user) must keep their current ownership behaviour")
+	}
+}
+
+func TestChownFailureOnlyWarns(t *testing.T) {
+	h, _ := newHarness(t)
+	h.inst.Chown = func(string, int, int) error { return os.ErrPermission }
+	h.inst.MkdirAll = func(p string) error { return os.MkdirAll(p, 0o755) }
+	yml := "services:\n  app:\n    image: nginx\n    user: '1000'\n    volumes:\n      - ${APPDATA}/data:/data\n"
+	job, err := h.inst.InstallCustom(context.Background(), CustomRequest{Name: "Warn App", Compose: yml})
+	if err != nil {
+		t.Fatalf("a chown failure must not block the install: %v", err)
+	}
+	wait(t, job)
+}

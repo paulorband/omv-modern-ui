@@ -92,6 +92,10 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
   URL, atualizar, remover); cards de fonte externa mostram o nome da fonte e "Incompatível" quando for
   o caso. Página do app: avisos, motivo da incompatibilidade (botão desabilitado) e checkbox para apps
   inseguros.
+- R09.10 (M) Antes do `compose up`, para cada serviço com `user:` numérico (`1000`, `1000:100`), as pastas
+  de bind dentro de `APPDATA` usadas por ele são criadas e recebem `chown` para esse uid:gid. Assim o Docker não
+  as cria como root e o app consegue gravar. Nomes de usuário, caminhos fora de `APPDATA` e arquivos
+  (origem com extensão) são ignorados.
 
 ## Critérios de aceite
 
@@ -106,6 +110,9 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
 - A09.6 URL com esquema inválido ou sem marcador de formato → 400.
 - A09.7 Falha de refresh mantém o catálogo anterior.
 - A09.8 UI: adicionar fonte mostra-a na lista; app incompatível tem botão desabilitado.
+- A09.9 Serviço com `user: <uid>[:<gid>]` numérico e volume em `${APPDATA}/…`: a pasta é criada antes do
+  `compose up` e entregue (recursivamente) a esse uid:gid; serviços sem `user` numérico não são tocados;
+  falha de `chown` só gera aviso.
 
 ## Notas de validação
 
@@ -113,6 +120,6 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
   (todos instaláveis; 3 marcados como inseguros por `docker.sock`/montagem de `/`) e 328 do
   `dennys-umbrel-app-store` (290 instaláveis; os demais incompatíveis por dependências, variáveis do Umbrel
   sem equivalente ou serviço principal indeterminado).
-- Ainda não testado em Docker real: a execução de apps de terceiros. Apps Umbrel com `user: 1000:1000` escrevem em
-  `APPDATA`, criado pelo OMV Home; ajuste as permissões da pasta se o app não conseguir gravar.
+- Ainda não testado em Docker real: a execução de apps de terceiros. O `chown` exige que o serviço rode como
+  root (o systemd unit do pacote roda); sem root ele só avisa no log.
 - O app_proxy do Umbrel (autenticação/HTTPS) não existe aqui: o app é publicado direto na porta escolhida.

@@ -48,6 +48,8 @@ type Installer struct {
 	// Both are replaceable in tests.
 	PortBusy func(port int) bool
 	MkdirAll func(path string) error
+	// Chown hands data folders to the user a container runs as (SPEC-09 R09.10).
+	Chown func(path string, uid, gid int) error
 
 	mu   sync.Mutex
 	jobs map[string]*Job
@@ -58,6 +60,7 @@ func NewInstaller(c *catalog.Catalog, a *apps.Service, d docker.Client, r compos
 		Catalog: c, Apps: a, Docker: d, Compose: r, PUID: puid, PGID: pgid, TZ: tz,
 		PortBusy: tcpPortBusy,
 		MkdirAll: func(p string) error { return os.MkdirAll(p, 0o755) },
+		Chown:    os.Chown,
 		jobs:     map[string]*Job{},
 	}
 }
@@ -271,6 +274,7 @@ func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
 			return nil, fmt.Errorf("criar %s: %w", d, err)
 		}
 	}
+	i.prepareOwners(appDataOwners(rendered, appData))
 
 	// 4. compose up in the background
 	job := newJob(id)
