@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, Copy, XCircle } from 'lucide-react'
 import { subscribe } from '../lib/sse'
 import type { InstallEvent } from '../lib/types'
-import { Spinner } from './ui'
+import { Button, Spinner } from './ui'
 
 /** Follows `/store/installs/{id}/events` until the install finishes (R05.9). */
 export function InstallProgress({ appId, onDone }: { appId: string; onDone: () => void }) {
@@ -10,6 +10,7 @@ export function InstallProgress({ appId, onDone }: { appId: string; onDone: () =
   const [status, setStatus] = useState<'running' | 'done' | 'error'>('running')
   const [error, setError] = useState('')
   const box = useRef<HTMLPreElement>(null)
+  const [copied, setCopied] = useState(false)
   const finished = useRef(false)
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
@@ -66,6 +67,15 @@ export function InstallProgress({ appId, onDone }: { appId: string; onDone: () =
       <pre ref={box} aria-label="Progresso da instalação" className="h-56 overflow-auto rounded-xl border border-line bg-black/80 p-3 font-mono text-xs text-green-200">
         {lines.length === 0 ? <span className="text-muted">Aguardando…</span> : lines.map((l, i) => <div key={i}>{l}</div>)}
       </pre>
+      {lines.length > 0 && (
+        <Button
+          onClick={() => {
+            void navigator.clipboard?.writeText([...lines, error && `ERRO: ${error}`].filter(Boolean).join('\n')).then(() => setCopied(true))
+          }}
+        >
+          <Copy className="h-4 w-4" aria-hidden /> {copied ? 'Log copiado' : 'Copiar log'}
+        </Button>
+      )}
     </div>
   )
 }

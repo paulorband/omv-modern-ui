@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { ExternalLink, FolderOpen, HardDrive, Home, LogOut, Package, Store } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { useOmvAdminUrl } from '../lib/useOmvUrl'
+import { InstallsWidget } from './InstallsWidget'
 import { cx } from './ui'
 
 const NAV = [
@@ -65,6 +66,8 @@ export function Layout() {
       <main className="flex-1">
         <Outlet />
       </main>
+
+      <InstallsWidget />
 
       <nav aria-label="Principal (celular)" className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-line bg-surface-solid px-2 py-1.5 sm:hidden">
         {NAV.map(({ to, label, icon: Icon, end }) => (

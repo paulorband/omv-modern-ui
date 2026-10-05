@@ -57,6 +57,7 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
     setSubmitting(true)
     try {
       await post(`/store/apps/${meta.id}/install`, { env: values, port: port ? Number(port) : 0, ...(allowUnsafe ? { allowUnsafe: true } : {}) })
+      void qc.invalidateQueries({ queryKey: ['installs'] })
       setInstalling(true)
     } catch (e) {
       setError(errorMessage(e))

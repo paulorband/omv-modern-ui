@@ -12,6 +12,8 @@ sistema operacional nem arquivos do OMV.
   `https://github.com/dennysubke/dennys-umbrel-app-store`). Os apps são convertidos para compose; os que dependem do
   runtime de outro sistema aparecem como incompatíveis, e os que pedem privilégios exigem confirmação
   ([SPEC-09](specs/09-custom-sources.md)). As fontes ficam em `OMVHOME_DATA_DIR/sources`.
+  Um **painel de instalações** fixo no canto da tela acompanha vários apps sendo instalados ao mesmo tempo, avisa
+  quando terminam e guarda o log completo, inclusive de falhas ([SPEC-10](specs/10-install-widget.md)).
 - **Containers**: containers e imagens Docker, logs ao vivo, criação por formulário ou colando um `docker run`.
 - **Armazenamento**: discos e pastas compartilhadas (SMB) com um assistente de 3 passos.
 - **Arquivos**: gerenciador de arquivos — *somente especificado* ([SPEC-07](specs/07-file-manager.md)).

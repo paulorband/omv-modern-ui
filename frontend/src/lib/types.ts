@@ -166,3 +166,13 @@ export type StoreSource = {
   updatedAt: string
   error?: string
 }
+
+export type InstallJob = {
+  id: string
+  title: string
+  icon?: string
+  state: 'running' | 'done' | 'error'
+  startedAt: string
+  finishedAt?: string
+  message?: string
+}

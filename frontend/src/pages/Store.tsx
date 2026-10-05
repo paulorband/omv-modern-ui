@@ -151,6 +151,7 @@ function CustomInstallDialog({ onClose }: { onClose: () => void }) {
     try {
       const r = await post<{ jobId: string }>('/store/custom', { name: name.trim(), compose, mainService: mainService.trim(), port: port ? Number(port) : 0, allowUnsafe })
       setJobId(r.jobId)
+      void qc.invalidateQueries({ queryKey: ['installs'] })
     } catch (e) {
       setError(errorMessage(e))
       if (e instanceof ApiError && e.message.includes('allowUnsafe')) setNeedsUnsafe(true)

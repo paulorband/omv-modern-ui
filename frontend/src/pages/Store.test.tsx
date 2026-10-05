@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
 import { Store, filterStore } from './Store'
 import { StoreApp } from './StoreApp'
+import { InstallsWidget } from '../components/InstallsWidget'
 import { validateField, validatePort } from '../lib/install'
 import { FakeEventSource, mockApi, renderApp } from '../test-utils'
 import type { EnvField, StoreCard, StoreDetail } from '../lib/types'
@@ -276,5 +277,30 @@ describe('custom sources (SPEC-09)', () => {
       await waitFor(() => expect(calls.find((c) => c.method === 'POST')).toBeDefined())
       expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ allowUnsafe: true })
     })
+  })
+})
+
+describe('install starts refresh the global widget (R10.12)', () => {
+  it('refetches the installs list right after the POST', async () => {
+    const routes = [
+      { path: '/store/apps/qbittorrent', body: DETAIL },
+      { path: '/docker/status', body: { available: true, composeAvailable: true } },
+      { path: '/store/installs', body: [] },
+      { method: 'POST', path: '/store/apps/qbittorrent/install', status: 202, body: { jobId: 'qbittorrent' } },
+    ]
+    const calls = mockApi(routes)
+    renderApp(
+      <>
+        <InstallsWidget />
+        <Routes>
+          <Route path="/store/:id" element={<StoreApp />} />
+        </Routes>
+      </>,
+      { route: '/store/qbittorrent' },
+    )
+    const user = userEvent.setup()
+    await waitFor(() => expect(calls.filter((c) => c.path === '/store/installs')).toHaveLength(1))
+    await user.click(await screen.findByRole('button', { name: /Instalar qBittorrent/ }))
+    await waitFor(() => expect(calls.filter((c) => c.path === '/store/installs')).toHaveLength(2))
   })
 })
