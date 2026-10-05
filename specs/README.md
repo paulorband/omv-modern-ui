@@ -15,6 +15,7 @@ feature implementada vira um commit que referencia o ID da spec (ex.: `feat(auth
 | 06 | [Armazenamento e compartilhamentos](06-storage.md) | Implementada |
 | 07 | [Gerenciador de arquivos](07-file-manager.md) | **Somente spec** (implementação futura) |
 | 08 | [Empacotamento e deploy](08-packaging.md) | Implementada (A08.2 `docker build` ainda não verificado: sem Docker na máquina de desenvolvimento) |
+| 09 | [Fontes de apps personalizadas (ZimaOS/Umbrel)](09-custom-sources.md) | Em implementação |
 
 ## Convenções
 
