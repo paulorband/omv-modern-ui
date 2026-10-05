@@ -455,3 +455,150 @@ func TestChownFailureOnlyWarns(t *testing.T) {
 	}
 	wait(t, job)
 }
+
+// gatedCompose blocks Up per project until released, so tests can observe running installs.
+type gatedCompose struct {
+	compose.Runner
+	gates map[string]chan struct{} // project → release
+	fail  map[string]bool
+}
+
+func (g *gatedCompose) Up(ctx context.Context, p, d string, on func(string)) error {
+	on("Pulling " + p)
+	if gate, ok := g.gates[p]; ok {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if g.fail[p] {
+		on("Error response from daemon: unauthorized")
+		return errors.New("pull access denied")
+	}
+	return g.Runner.Up(ctx, p, d, on)
+}
+
+func waitState(t *testing.T, i *Installer, id, state string) JobSummary {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, s := range i.Jobs() {
+			if s.ID == id && s.State == state {
+				return s
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("job %s never reached %s: %+v", id, state, i.Jobs())
+	return JobSummary{}
+}
+
+func TestJobsListSeveralConcurrentInstalls(t *testing.T) { // A10.1, A10.2, A10.3
+	h, _ := newHarness(t)
+	g := &gatedCompose{Runner: compose.NewMockRunner(h.dm), gates: map[string]chan struct{}{}, fail: map[string]bool{}}
+	h.inst.Compose = g
+	for _, id := range []string{"uptime-kuma", "vaultwarden"} {
+		g.gates[compose.ProjectName(id)] = make(chan struct{})
+	}
+	g.fail[compose.ProjectName("vaultwarden")] = true
+
+	for _, id := range []string{"uptime-kuma", "vaultwarden"} {
+		if _, err := h.inst.Install(context.Background(), id, InstallRequest{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	waitState(t, h.inst, "uptime-kuma", "running")
+	waitState(t, h.inst, "vaultwarden", "running")
+	var list []JobSummary
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		if list = h.inst.Jobs(); len(list) == 2 && list[0].Message != "" && list[1].Message != "" {
+			break
+		}
+	}
+	if len(list) != 2 || list[0].Title == "" || list[0].Message == "" || list[1].Message == "" {
+		t.Fatalf("running jobs: %+v", list)
+	}
+	if err := h.inst.Dismiss("uptime-kuma"); err == nil || !errors.As(err, new(*ConflictError)) {
+		t.Fatalf("dismissing a running job: %v", err)
+	}
+
+	close(g.gates[compose.ProjectName("vaultwarden")]) // this one fails
+	failed := waitState(t, h.inst, "vaultwarden", "error")
+	if failed.FinishedAt == nil || !strings.Contains(failed.Message, "pull access denied") {
+		t.Fatalf("failed summary: %+v", failed)
+	}
+	if got := waitState(t, h.inst, "uptime-kuma", "running"); got.FinishedAt != nil {
+		t.Fatalf("the other install must stay running: %+v", got)
+	}
+
+	close(g.gates[compose.ProjectName("uptime-kuma")])
+	waitState(t, h.inst, "uptime-kuma", "done")
+
+	// the full log of the failed install is still there (A10.2)
+	job, ok := h.inst.Job("vaultwarden")
+	if !ok {
+		t.Fatal("failed job vanished")
+	}
+	var log []string
+	for _, e := range wait(t, job) {
+		log = append(log, e.Type+":"+e.Message)
+	}
+	joined := strings.Join(log, "\n")
+	for _, want := range []string{"starting:", "pull:Pulling", "log:Error response from daemon", "error:pull access denied"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("log missing %q:\n%s", want, joined)
+		}
+	}
+
+	// dismissing (A10.3)
+	if err := h.inst.Dismiss("vaultwarden"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.inst.Dismiss("vaultwarden"); !errors.Is(err, ErrJobNotFound) {
+		t.Fatalf("dismiss twice: %v", err)
+	}
+	if len(h.inst.Jobs()) != 1 {
+		t.Fatalf("after dismiss: %+v", h.inst.Jobs())
+	}
+}
+
+func TestFinishedJobsExpireAfterRetention(t *testing.T) { // A10.4
+	h, _ := newHarness(t)
+	old := newJob("old")
+	old.emit(Event{Type: "done"})
+	old.finishedAt = time.Now().Add(-jobRetention - time.Minute)
+	fresh := newJob("fresh")
+	fresh.emit(Event{Type: "done"})
+	h.inst.jobs["old"], h.inst.jobs["fresh"] = old, fresh
+	list := h.inst.Jobs()
+	if len(list) != 1 || list[0].ID != "fresh" {
+		t.Fatalf("%+v", list)
+	}
+}
+
+func TestJobLogIsBoundedButKeepsTheEnd(t *testing.T) { // R10.5
+	j := newJob("big")
+	for i := 0; i < maxLogEvents+500; i++ {
+		j.emit(Event{Type: "log", Message: "line"})
+	}
+	j.emit(Event{Type: "error", Message: "boom"})
+	evs := wait(t, j)
+	if len(evs) != maxLogEvents+1 || evs[len(evs)-1].Type != "error" {
+		t.Fatalf("len=%d last=%+v", len(evs), evs[len(evs)-1])
+	}
+	if s := j.Summary(); s.State != "error" || s.Message != "boom" {
+		t.Fatalf("%+v", s)
+	}
+}
+
+func TestSummaryStates(t *testing.T) {
+	j := newJob("a")
+	if s := j.Summary(); s.State != "running" || s.Title != "a" || s.FinishedAt != nil {
+		t.Fatalf("%+v", s)
+	}
+	j.emit(Event{Type: "done", Message: "ok"})
+	if s := j.Summary(); s.State != "done" || s.Message != "ok" || s.FinishedAt == nil {
+		t.Fatalf("%+v", s)
+	}
+}

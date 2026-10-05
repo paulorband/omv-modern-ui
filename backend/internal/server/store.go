@@ -32,6 +32,8 @@ func storeErr(err error) error {
 		return httpx.Upstream("%s", srcFetch.Error())
 	case errors.Is(err, catalog.ErrSourceNotFound):
 		return httpx.NotFound("fonte não encontrada")
+	case errors.Is(err, store.ErrJobNotFound):
+		return httpx.NotFound("instalação não encontrada")
 	case errors.Is(err, catalog.ErrNotFound):
 		return httpx.NotFound("app não encontrado no catálogo")
 	case errors.Is(err, compose.ErrUnavailable):
@@ -101,6 +103,19 @@ func (d Deps) registerStore(api *http.ServeMux, protect func(http.Handler) http.
 			return storeErr(err)
 		}
 		httpx.JSON(w, http.StatusAccepted, map[string]string{"jobId": job.ID})
+		return nil
+	}))
+
+	api.Handle("GET /store/installs", h(func(w http.ResponseWriter, r *http.Request) error {
+		httpx.JSON(w, http.StatusOK, d.Store.Jobs())
+		return nil
+	}))
+
+	api.Handle("DELETE /store/installs/{id}", h(func(w http.ResponseWriter, r *http.Request) error {
+		if err := d.Store.Dismiss(r.PathValue("id")); err != nil {
+			return storeErr(err)
+		}
+		w.WriteHeader(http.StatusNoContent)
 		return nil
 	}))
 

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -278,6 +279,7 @@ func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
 
 	// 4. compose up in the background
 	job := newJob(id)
+	job.Title, job.Icon = p.meta.Title, p.meta.Icon
 	i.mu.Lock()
 	i.pruneJobsLocked()
 	i.jobs[id] = job
@@ -305,7 +307,7 @@ func (i *Installer) run(job *Job, id, dir string) {
 func (i *Installer) pruneJobsLocked() {
 	for id, j := range i.jobs {
 		j.mu.Lock()
-		stale := j.done && time.Since(j.finishedAt) > time.Hour
+		stale := j.done && time.Since(j.finishedAt) > jobRetention
 		j.mu.Unlock()
 		if stale {
 			delete(i.jobs, id)
@@ -396,4 +398,42 @@ func randomHex(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// jobRetention is how long finished installs (and their logs) stay listed (R10.3).
+const jobRetention = 24 * time.Hour
+
+// ErrJobNotFound means there is no install job with that id.
+var ErrJobNotFound = errors.New("instalação não encontrada")
+
+// Jobs lists known installs, most recent first (R10.1).
+func (i *Installer) Jobs() []JobSummary {
+	i.mu.Lock()
+	i.pruneJobsLocked()
+	jobs := make([]*Job, 0, len(i.jobs))
+	for _, j := range i.jobs {
+		jobs = append(jobs, j)
+	}
+	i.mu.Unlock()
+	out := make([]JobSummary, 0, len(jobs))
+	for _, j := range jobs {
+		out = append(out, j.Summary())
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].StartedAt.After(out[b].StartedAt) })
+	return out
+}
+
+// Dismiss forgets a finished install and its log (R10.4).
+func (i *Installer) Dismiss(id string) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	j, ok := i.jobs[id]
+	if !ok {
+		return ErrJobNotFound
+	}
+	if !j.Done() {
+		return conflict("a instalação de %q ainda está em andamento", id)
+	}
+	delete(i.jobs, id)
+	return nil
 }

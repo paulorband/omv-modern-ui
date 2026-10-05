@@ -125,3 +125,37 @@ func TestStoreCustomInstallOverHTTP(t *testing.T) {
 		t.Fatalf("custom app missing: %s", rec.Body)
 	}
 }
+
+func TestStoreInstallsListAndDismissOverHTTP(t *testing.T) { // A10.1-A10.3
+	h, c := newStoreServer(t)
+	if rec := do(h, "GET", "/api/v1/store/installs", "", nil, false); rec.Code != 401 {
+		t.Fatalf("list without session: %d", rec.Code)
+	}
+	if rec := do(h, "GET", "/api/v1/store/installs", "", c, false); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Fatalf("empty list: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", "/api/v1/store/apps/uptime-kuma/install", `{"port":3055}`, c, true); rec.Code != 202 {
+		t.Fatalf("install: %d %s", rec.Code, rec.Body)
+	}
+	_ = do(h, "GET", "/api/v1/store/installs/uptime-kuma/events", "", c, false) // waits for the job
+
+	rec := do(h, "GET", "/api/v1/store/installs", "", c, false)
+	var list []struct {
+		ID, Title, State string
+	}
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &list) != nil || len(list) != 1 || list[0].ID != "uptime-kuma" || list[0].Title != "Uptime Kuma" || list[0].State != "done" {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "DELETE", "/api/v1/store/installs/uptime-kuma", "", c, false); rec.Code != 403 {
+		t.Errorf("dismiss without CSRF header: %d", rec.Code)
+	}
+	if rec := do(h, "DELETE", "/api/v1/store/installs/uptime-kuma", "", c, true); rec.Code != 204 {
+		t.Fatalf("dismiss: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "DELETE", "/api/v1/store/installs/uptime-kuma", "", c, true); rec.Code != 404 {
+		t.Errorf("dismiss twice: %d", rec.Code)
+	}
+	if rec := do(h, "GET", "/api/v1/store/installs", "", c, false); strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Errorf("list after dismiss: %s", rec.Body)
+	}
+}

@@ -15,7 +15,10 @@ type Event struct {
 
 // Job records the events of one install so late SSE subscribers can replay them.
 type Job struct {
-	ID string
+	ID        string
+	Title     string
+	Icon      string
+	StartedAt time.Time
 
 	mu         sync.Mutex
 	events     []Event
@@ -24,11 +27,20 @@ type Job struct {
 	wake       chan struct{}
 }
 
-func newJob(id string) *Job { return &Job{ID: id, wake: make(chan struct{})} }
+func newJob(id string) *Job {
+	return &Job{ID: id, StartedAt: time.Now(), wake: make(chan struct{})}
+}
+
+// maxLogEvents bounds the stored output of one install; done and error are always kept (R10.5).
+const maxLogEvents = 5000
 
 func (j *Job) emit(e Event) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	final := e.Type == "done" || e.Type == "error"
+	if len(j.events) >= maxLogEvents && !final {
+		return
+	}
 	j.events = append(j.events, e)
 	if e.Type == "done" || e.Type == "error" {
 		j.done, j.finishedAt = true, time.Now()
@@ -76,4 +88,40 @@ func lineEvent(line string) Event {
 		return Event{Type: "pull", Message: line}
 	}
 	return Event{Type: "log", Message: line}
+}
+
+// JobSummary is the list item of GET /store/installs (SPEC-10).
+type JobSummary struct {
+	ID         string     `json:"id"`
+	Title      string     `json:"title"`
+	Icon       string     `json:"icon,omitempty"`
+	State      string     `json:"state"` // running | done | error
+	StartedAt  time.Time  `json:"startedAt"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+	Message    string     `json:"message,omitempty"`
+}
+
+// Summary snapshots the job for listing.
+func (j *Job) Summary() JobSummary {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	s := JobSummary{ID: j.ID, Title: j.Title, Icon: j.Icon, State: "running", StartedAt: j.StartedAt}
+	if s.Title == "" {
+		s.Title = j.ID
+	}
+	for i := len(j.events) - 1; i >= 0; i-- {
+		if m := j.events[i].Message; m != "" {
+			s.Message = m
+			break
+		}
+	}
+	if j.done {
+		t := j.finishedAt
+		s.FinishedAt = &t
+		s.State = "done"
+		if last := j.events[len(j.events)-1]; last.Type == "error" {
+			s.State = "error"
+		}
+	}
+	return s
 }
