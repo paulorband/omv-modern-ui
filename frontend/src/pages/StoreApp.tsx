@@ -66,8 +66,8 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-      <div>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="min-w-0">
         <div className="mb-4 flex items-center gap-4">
           <AppIcon icon={meta.icon} name={meta.title} className="h-20 w-20" />
           <div>
@@ -82,10 +82,10 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
             </div>
           </div>
         </div>
-        <p className="mb-6 whitespace-pre-line leading-relaxed">{meta.description}</p>
+        <p className="mb-6 whitespace-pre-line break-words leading-relaxed">{meta.description}</p>
         <details className="rounded-xl border border-line bg-surface p-3 text-sm">
           <summary className="cursor-pointer font-medium">Ver docker-compose</summary>
-          <pre className="mt-3 overflow-auto font-mono text-xs">{data.compose}</pre>
+          <pre className="mt-3 max-w-full overflow-auto font-mono text-xs">{data.compose}</pre>
         </details>
       </div>
 
