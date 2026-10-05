@@ -60,15 +60,17 @@ export function Store() {
           <input type="search" aria-label="Buscar na loja" placeholder="Buscar na loja" value={query} onChange={(e) => setQuery(e.target.value)} className={cx(inputCls, 'w-64 pl-9')} />
         </div>
         {sourceList.length > 0 && (
-          <select aria-label="Fonte" value={source} onChange={(e) => setSource(e.target.value)} className={cx(inputCls, 'w-auto')}>
-            <option value={ALL}>Todas as fontes</option>
-            <option value={BUILTIN}>OMV Home</option>
-            {sourceList.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          <div className="w-56">
+            <select aria-label="Fonte" value={source} onChange={(e) => setSource(e.target.value)} className={inputCls}>
+              <option value={ALL}>Todas as fontes</option>
+              <option value={BUILTIN}>OMV Home</option>
+              {sourceList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Categorias">
           {categories.map((c) => (
@@ -97,8 +99,8 @@ export function Store() {
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visible.slice(0, limit).map((c) => (
             <li key={c.id}>
-              <Link to={`/store/${c.id}`} className="block rounded-2xl focus-visible:outline-offset-4">
-                <Card className="flex items-center gap-4 p-4 transition hover:-translate-y-0.5">
+              <Link to={`/store/${c.id}`} className="block h-full rounded-2xl focus-visible:outline-offset-4">
+                <Card className="flex h-full items-center gap-4 p-4 transition hover:-translate-y-0.5">
                   <AppIcon icon={c.icon} name={c.title} />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 font-medium">

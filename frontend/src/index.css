@@ -82,3 +82,9 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Native dropdown lists ignore the translucent select background; give them a solid one. */
+select option {
+  background-color: var(--surface-solid);
+  color: var(--text);
+}
