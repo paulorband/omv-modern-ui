@@ -41,11 +41,14 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [installing, setInstalling] = useState(false)
+  const [allowUnsafe, setAllowUnsafe] = useState(false)
+  const unsafe = data.unsafe ?? []
+  const warnings = data.warnings ?? []
 
   const errors: Record<string, string | undefined> = Object.fromEntries(fields.map((f) => [f.key, validateField(f, values[f.key] ?? '')]))
   const portError = validatePort(port)
   const hasErrors = Object.values(errors).some(Boolean) || !!portError
-  const canInstall = composeOk && dockerOk && !data.installed
+  const canInstall = composeOk && dockerOk && !data.installed && !data.unsupported && (unsafe.length === 0 || allowUnsafe)
 
   async function install() {
     setTouched(true)
@@ -53,7 +56,7 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
     setError(null)
     setSubmitting(true)
     try {
-      await post(`/store/apps/${meta.id}/install`, { env: values, port: port ? Number(port) : 0 })
+      await post(`/store/apps/${meta.id}/install`, { env: values, port: port ? Number(port) : 0, ...(allowUnsafe ? { allowUnsafe: true } : {}) })
       setInstalling(true)
     } catch (e) {
       setError(errorMessage(e))
@@ -73,10 +76,13 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
               {data.installed && <Badge tone="ok">Instalado</Badge>}
             </h1>
             <p className="text-muted">{meta.tagline}</p>
-            <Badge>{meta.category}</Badge>
+            <div className="flex flex-wrap gap-2">
+              <Badge>{meta.category}</Badge>
+              {data.source && <Badge>Fonte: {data.sourceName || data.source}</Badge>}
+            </div>
           </div>
         </div>
-        <p className="mb-6 leading-relaxed">{meta.description}</p>
+        <p className="mb-6 whitespace-pre-line leading-relaxed">{meta.description}</p>
         <details className="rounded-xl border border-line bg-surface p-3 text-sm">
           <summary className="cursor-pointer font-medium">Ver docker-compose</summary>
           <pre className="mt-3 overflow-auto font-mono text-xs">{data.compose}</pre>
@@ -106,6 +112,31 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
             {!dockerOk && <p role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-2.5 text-sm text-danger">O Docker não está disponível no servidor.</p>}
             {dockerOk && !composeOk && <p role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-2.5 text-sm text-danger">O docker compose não está instalado; a instalação de apps está desativada.</p>}
             {data.installed && <p className="text-sm text-muted">Este app já está instalado. Gerencie-o na tela inicial.</p>}
+            {data.unsupported && (
+              <p role="alert" className="rounded-xl border border-warn/40 bg-warn/10 p-2.5 text-sm">
+                Este app não pode ser instalado aqui: {data.unsupported}.
+              </p>
+            )}
+            {data.source && !data.unsupported && (
+              <p className="rounded-xl border border-line bg-surface-2 p-2.5 text-xs text-muted">
+                App de uma fonte externa, sem verificação. Revise o docker-compose ao lado antes de instalar.
+              </p>
+            )}
+            {warnings.length > 0 && (
+              <ul className="list-disc space-y-1 rounded-xl border border-warn/40 bg-warn/10 p-2.5 pl-6 text-xs" aria-label="Avisos">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            )}
+            {unsafe.length > 0 && !data.unsupported && (
+              <label className="flex items-start gap-2 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">
+                <input type="checkbox" className="mt-1" checked={allowUnsafe} onChange={(e) => setAllowUnsafe(e.target.checked)} />
+                <span>
+                  Permitir configurações inseguras ({unsafe.join("; ")}). Isso dá ao container acesso amplo ao servidor.
+                </span>
+              </label>
+            )}
 
             {fields.map((f) => (
               <FieldInput key={f.key} field={f} value={values[f.key] ?? ''} error={touched ? errors[f.key] : undefined} onChange={(v) => setValues((s) => ({ ...s, [f.key]: v }))} />

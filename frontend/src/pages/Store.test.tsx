@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
 import { Store, filterStore } from './Store'
@@ -163,5 +163,118 @@ describe('Store detail + install flow (A05.x UI)', () => {
     renderDetail()
     expect(await screen.findByText(/já está instalado/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Instalar qBittorrent/ })).toBeDisabled()
+  })
+})
+
+describe('custom sources (SPEC-09)', () => {
+  const SRC = { id: 'umbrel', name: 'Denny Umbrel', url: 'https://github.com/dennysubke/dennys-umbrel-app-store', format: 'umbrel', apps: 328, updatedAt: '2026-10-05T10:00:00Z' }
+  const EXTERNAL: StoreCard[] = [
+    ...CARDS,
+    { id: 'denny-actualbudget', title: 'Actual Budget', tagline: 'Finanças', icon: '', category: 'Finance', installed: false, source: 'umbrel' },
+    { id: 'denny-ente', title: 'Ente', tagline: 'Fotos', icon: '', category: 'Photos', installed: false, source: 'umbrel', unsupported: true },
+  ]
+
+  it('filters by source (R09.9)', () => {
+    expect(filterStore(EXTERNAL, '', 'Todos', 'umbrel').map((c) => c.id)).toEqual(['denny-actualbudget', 'denny-ente'])
+    expect(filterStore(EXTERNAL, '', 'Todos', 'builtin')).toHaveLength(3)
+    expect(filterStore(EXTERNAL, '', 'Todos', 'Todos')).toHaveLength(5)
+  })
+
+  it('shows the source name, an incompatible badge, and the source filter', async () => {
+    mockApi([{ path: '/store/apps', body: EXTERNAL }, { path: '/store/sources', body: [SRC] }])
+    renderApp(<Store />)
+    const user = userEvent.setup()
+    expect(await screen.findByText('Actual Budget')).toBeInTheDocument()
+    expect(screen.getAllByText('Denny Umbrel').length).toBeGreaterThan(0)
+    expect(screen.getByText('Incompatível')).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Fonte'), 'umbrel')
+    expect(screen.queryByText('Nextcloud')).not.toBeInTheDocument()
+    expect(screen.getByText('Ente')).toBeInTheDocument()
+  })
+
+  it('hides the source filter when there are no sources', async () => {
+    mockApi([{ path: '/store/apps', body: CARDS }, { path: '/store/sources', body: [] }])
+    renderApp(<Store />)
+    await screen.findByText('Nextcloud')
+    expect(screen.queryByLabelText('Fonte')).not.toBeInTheDocument()
+  })
+
+  it('adds a source by URL and shows backend errors (A09.8)', async () => {
+    const calls = mockApi([
+      { path: '/store/apps', body: CARDS },
+      { path: '/store/sources', body: [] },
+      { method: 'POST', path: '/store/sources', status: 400, body: { error: { code: 'invalid_request', message: 'formato não reconhecido' } } },
+    ])
+    renderApp(<Store />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Fontes/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Fontes de apps' })
+    expect(await within(dialog).findByText('Nenhuma fonte adicionada ainda.')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Adicionar fonte' })).toBeDisabled()
+    await user.type(within(dialog).getByLabelText('Endereço da fonte'), 'https://github.com/x/y')
+    await user.click(within(dialog).getByRole('button', { name: 'Adicionar fonte' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('formato não reconhecido')
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ url: 'https://github.com/x/y', name: '' })
+  })
+
+  it('lists, refreshes and removes sources', async () => {
+    const calls = mockApi([
+      { path: '/store/apps', body: CARDS },
+      { path: '/store/sources', body: [SRC] },
+      { method: 'POST', path: '/store/sources/umbrel/refresh', body: SRC },
+      { method: 'DELETE', path: '/store/sources/umbrel', status: 204 },
+    ])
+    renderApp(<Store />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Fontes/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Fontes de apps' })
+    expect(await within(dialog).findByText('Denny Umbrel')).toBeInTheDocument()
+    expect(within(dialog).getByText('328 apps', { exact: false })).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Atualizar Denny Umbrel' }))
+    await waitFor(() => expect(calls.some((c) => c.path === '/store/sources/umbrel/refresh')).toBe(true))
+
+    await user.click(within(dialog).getByRole('button', { name: 'Remover Denny Umbrel' }))
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false) // needs confirmation
+    await user.click(within(dialog).getByRole('button', { name: 'Remover Denny Umbrel' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true))
+  })
+
+  describe('source app detail', () => {
+    const detail = (over: Partial<StoreDetail>): StoreDetail => ({ ...DETAIL, source: 'umbrel', sourceName: 'Denny Umbrel', unsafe: [], warnings: [], ...over })
+    const renderDetail = () =>
+      renderApp(
+        <Routes>
+          <Route path="/store/:id" element={<StoreApp />} />
+        </Routes>,
+        { route: '/store/qbittorrent' },
+      )
+    const dockerOk = { path: '/docker/status', body: { available: true, composeAvailable: true } }
+
+    it('blocks incompatible apps and says why', async () => {
+      mockApi([{ path: '/store/apps/qbittorrent', body: detail({ unsupported: 'depende de outros apps do Umbrel (bitcoin)' }) }, dockerOk])
+      renderDetail()
+      expect(await screen.findByText(/depende de outros apps do Umbrel/)).toBeInTheDocument()
+      expect(screen.getByText('Fonte: Denny Umbrel')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Instalar qBittorrent/ })).toBeDisabled()
+    })
+
+    it('requires the unsafe checkbox and sends allowUnsafe', async () => {
+      const calls = mockApi([
+        { path: '/store/apps/qbittorrent', body: detail({ unsafe: ['web: privileged: true'], warnings: ['web: capacidades extras (NET_ADMIN)'] }) },
+        dockerOk,
+        { method: 'POST', path: '/store/apps/qbittorrent/install', status: 202, body: { jobId: 'qbittorrent' } },
+      ])
+      renderDetail()
+      const user = userEvent.setup()
+      const install = await screen.findByRole('button', { name: /Instalar qBittorrent/ })
+      expect(screen.getByText(/capacidades extras/)).toBeInTheDocument()
+      expect(install).toBeDisabled()
+      await user.click(screen.getByRole('checkbox', { name: /Permitir configurações inseguras/ }))
+      expect(install).toBeEnabled()
+      await user.click(install)
+      await waitFor(() => expect(calls.find((c) => c.method === 'POST')).toBeDefined())
+      expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ allowUnsafe: true })
+    })
   })
 })

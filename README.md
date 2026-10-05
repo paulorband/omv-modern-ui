@@ -7,6 +7,11 @@ sistema operacional nem arquivos do OMV.
 - **Início**: widgets de CPU, memória, rede e discos, e os seus containers como **apps** (ícones clicáveis).
 - **Loja**: instalação de apps em um clique a partir de templates docker compose (Jellyfin, Pi-hole,
   Vaultwarden, Syncthing, Uptime Kuma, qBittorrent, Home Assistant, Nextcloud) ou de um compose colado por você.
+  Também aceita **fontes personalizadas** (botão *Fontes*): repositórios de lojas no formato do **ZimaOS/CasaOS**
+  ou do **Umbrel** (ex.: `https://github.com/WisdomSky/LinuxServer-AppStore`,
+  `https://github.com/dennysubke/dennys-umbrel-app-store`). Os apps são convertidos para compose; os que dependem do
+  runtime de outro sistema aparecem como incompatíveis, e os que pedem privilégios exigem confirmação
+  ([SPEC-09](specs/09-custom-sources.md)). As fontes ficam em `OMVHOME_DATA_DIR/sources`.
 - **Containers**: containers e imagens Docker, logs ao vivo, criação por formulário ou colando um `docker run`.
 - **Armazenamento**: discos e pastas compartilhadas (SMB) com um assistente de 3 passos.
 - **Arquivos**: gerenciador de arquivos — *somente especificado* ([SPEC-07](specs/07-file-manager.md)).

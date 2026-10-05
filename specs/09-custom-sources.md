@@ -106,3 +106,13 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
 - A09.6 URL com esquema inválido ou sem marcador de formato → 400.
 - A09.7 Falha de refresh mantém o catálogo anterior.
 - A09.8 UI: adicionar fonte mostra-a na lista; app incompatível tem botão desabilitado.
+
+## Notas de validação
+
+- Conversão exercitada com os repositórios reais citados acima: 246 apps do `LinuxServer-AppStore`
+  (todos instaláveis; 3 marcados como inseguros por `docker.sock`/montagem de `/`) e 328 do
+  `dennys-umbrel-app-store` (290 instaláveis; os demais incompatíveis por dependências, variáveis do Umbrel
+  sem equivalente ou serviço principal indeterminado).
+- Ainda não testado em Docker real: a execução de apps de terceiros. Apps Umbrel com `user: 1000:1000` escrevem em
+  `APPDATA`, criado pelo OMV Home; ajuste as permissões da pasta se o app não conseguir gravar.
+- O app_proxy do Umbrel (autenticação/HTTPS) não existe aqui: o app é publicado direto na porta escolhida.

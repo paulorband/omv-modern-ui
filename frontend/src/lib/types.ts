@@ -105,6 +105,9 @@ export type StoreCard = {
   icon: string
   category: string
   installed: boolean
+  /** Custom source id; absent for built-in apps. */
+  source?: string
+  unsupported?: boolean
 }
 
 export type EnvField = {
@@ -130,6 +133,13 @@ export type StoreDetail = {
   }
   compose: string
   installed: boolean
+  source?: string
+  sourceName?: string
+  /** Why the app cannot be installed here, when it cannot. */
+  unsupported?: string
+  /** Risky settings that need an explicit allowUnsafe. */
+  unsafe?: string[]
+  warnings?: string[]
 }
 
 export type InstallEvent = { type: 'starting' | 'pull' | 'log' | 'done' | 'error'; message?: string }
@@ -146,3 +156,13 @@ export type Share = {
 }
 
 export type OmvUser = { name: string; uid: number; comment: string }
+
+export type StoreSource = {
+  id: string
+  name: string
+  url: string
+  format: 'umbrel' | 'casaos'
+  apps: number
+  updatedAt: string
+  error?: string
+}
