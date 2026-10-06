@@ -149,7 +149,7 @@ func TestUmbrelConversion(t *testing.T) { // A09.1, A09.3, A09.4
 		t.Fatalf("default credentials missing from description: %q", web.Meta.Description)
 	}
 	c := web.Compose
-	for _, want := range []string{"${PORT:-8080}:80", "${APPDATA}/db:/var/lib/mysql", "${APPDATA}/data:/data", "DB_HOST=db", "ID=acme-web", "SEED=${APP_SEED}"} {
+	for _, want := range []string{"${PORT:-8080}:${CONTAINER_PORT:-80}", "${APPDATA}/db:/var/lib/mysql", "${APPDATA}/data:/data", "DB_HOST=db", "ID=acme-web", "SEED=${APP_SEED}"} {
 		if !strings.Contains(c, want) {
 			t.Errorf("compose missing %q:\n%s", want, c)
 		}
@@ -437,5 +437,19 @@ func TestUmbrelAppWithoutProxyPublishesItsOwnPort(t *testing.T) {
 	}
 	if !strings.Contains(a.Compose, "${PORT:-8096}:8080") {
 		t.Errorf("published port not parameterized:\n%s", a.Compose)
+	}
+}
+
+func TestUmbrelContainerPortIsAdjustable(t *testing.T) { // proxy port in a manifest can be wrong (Portainer: 8000 is the tunnel port)
+	_, _, apps := mustLoad(t, makeZip(t, "acme-main/", umbrelFiles))
+	web := apps["acme-web"]
+	var f *EnvField
+	for i := range web.Meta.Env {
+		if web.Meta.Env[i].Key == "CONTAINER_PORT" {
+			f = &web.Meta.Env[i]
+		}
+	}
+	if f == nil || f.Type != "port" || f.Default != "80" || !f.Internal || !f.Required {
+		t.Fatalf("CONTAINER_PORT field: %+v", f)
 	}
 }

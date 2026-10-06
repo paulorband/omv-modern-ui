@@ -117,6 +117,8 @@ export type EnvField = {
   default: string
   required: boolean
   options?: string[]
+  /** Container-side port: validated, but not checked against host ports. */
+  internal?: boolean
 }
 
 export type StoreDetail = {

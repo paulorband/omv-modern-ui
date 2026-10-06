@@ -602,3 +602,34 @@ func TestSummaryStates(t *testing.T) {
 		t.Fatalf("%+v", s)
 	}
 }
+
+func TestInternalPortFieldsAreNotHostPorts(t *testing.T) {
+	m := catalog.Meta{Env: []catalog.EnvField{
+		{Key: "CONTAINER_PORT", Label: "Porta interna", Type: "port", Default: "9000", Internal: true},
+		{Key: "OTHER", Label: "Outra", Type: "port", Default: "9001"},
+	}}
+	_, _, ports, err := resolveFields(m, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ports) != 1 || ports[0] != 9001 {
+		t.Fatalf("only host ports are checked for conflicts: %v", ports)
+	}
+	if _, _, _, err := resolveFields(m, map[string]string{"CONTAINER_PORT": "0"}); err == nil {
+		t.Fatal("internal ports are still validated")
+	}
+}
+
+func TestQbittorrentUsesSamePortOnBothSides(t *testing.T) {
+	h, _ := newHarness(t)
+	job, err := h.inst.Install(context.Background(), "qbittorrent", InstallRequest{Port: 8099, Env: map[string]string{"DOWNLOADS_DIR": "/srv/dl"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait(t, job)
+	env, _ := os.ReadFile(filepath.Join(h.inst.Apps.ProjectDir("qbittorrent"), compose.EnvFile))
+	yml, _ := os.ReadFile(filepath.Join(h.inst.Apps.ProjectDir("qbittorrent"), compose.ComposeFile))
+	if !strings.Contains(string(env), "PORT=8099") || !strings.Contains(string(yml), `${PORT:-8083}:${PORT:-8083}`) || !strings.Contains(string(yml), `WEBUI_PORT: ${PORT:-8083}`) {
+		t.Fatalf("env:\n%s\ncompose:\n%s", env, yml)
+	}
+}

@@ -186,21 +186,24 @@ func withHostPort(e any, expr string) any {
 	return e
 }
 
-// publishPort makes the service publish containerPort on the host through expr. Existing entries
-// for that container port are rewritten; otherwise one is added.
-func publishPort(svc map[string]any, containerPort int, expr string) {
+// publishPort makes the service publish containerPort on the host through hostExpr. Existing entries
+// for that container port get their host side rewritten; otherwise "hostExpr:containerExpr" is added,
+// which is reported by the return value.
+func publishPort(svc map[string]any, containerPort int, hostExpr, containerExpr string) (added bool) {
 	ports, _ := svc["ports"].([]any)
 	found := false
 	for i, p := range ports {
 		if host, cont := parsePortEntry(p); cont == containerPort && host != 0 {
-			ports[i] = withHostPort(p, expr)
+			ports[i] = withHostPort(p, hostExpr)
 			found = true
 		}
 	}
 	if !found {
-		ports = append(ports, fmt.Sprintf("%s:%d", expr, containerPort))
+		ports = append(ports, hostExpr+":"+containerExpr)
+		added = true
 	}
 	svc["ports"] = ports
+	return added
 }
 
 // finish turns a converted compose document into a template: it rewrites variables, rejects

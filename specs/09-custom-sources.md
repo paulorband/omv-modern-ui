@@ -53,6 +53,9 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
   `path`, `defaultUsername`/`defaultPassword` (acrescentados à descrição).
 - O serviço `app_proxy` é removido. O serviço principal e a porta interna vêm de `APP_HOST`
   (`<id>_<serviço>_1`) e `APP_PORT`; a porta é publicada como `${PORT:-<port do manifesto>}:<APP_PORT>`.
+  Como alguns manifestos apontam o proxy para a porta errada (ex.: Portainer aponta para 8000, o túnel de agentes,
+  enquanto a interface fica em 9000), o lado do container é um campo do formulário (`CONTAINER_PORT`, padrão
+  `APP_PORT`, marcado `internal`: validado, mas não checado contra portas do host).
 - Referências `<id>_<serviço>_1` viram o nome do serviço (rede interna do compose).
 - Variáveis: `APP_DATA_DIR` → `${APPDATA}`; `APP_ID` → id; `APP_SEED` → segredo aleatório gerado na
   instalação (gravado no `.env` do app); `APP_DOMAIN` e `DEVICE_DOMAIN_NAME` → campo opcional

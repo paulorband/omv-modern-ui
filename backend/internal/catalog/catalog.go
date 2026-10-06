@@ -40,6 +40,8 @@ type EnvField struct {
 	Default  string   `yaml:"default" json:"default"`
 	Required bool     `yaml:"required" json:"required"`
 	Options  []string `yaml:"options,omitempty" json:"options,omitempty"`
+	// Internal marks a "port" field that is a container port: it is not checked against host ports.
+	Internal bool `yaml:"internal,omitempty" json:"internal,omitempty"`
 }
 
 type Meta struct {

@@ -3,6 +3,7 @@ package catalog
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -83,7 +84,10 @@ func convertUmbrel(dir string, manifestRaw, composeRaw []byte, sourceID string) 
 		case main == "":
 		case containerPort > 0:
 			meta.Port = hostPort
-			publishPort(asMap(services[main]), containerPort, fmt.Sprintf("${PORT:-%d}", hostPort))
+			// Some manifests point app_proxy at the wrong port, so the container side is adjustable.
+			if publishPort(asMap(services[main]), containerPort, fmt.Sprintf("${PORT:-%d}", hostPort), fmt.Sprintf("${CONTAINER_PORT:-%d}", containerPort)) {
+				meta.Env = append(meta.Env, EnvField{Key: "CONTAINER_PORT", Label: "Porta interna do app (altere se a interface não abrir)", Type: "port", Default: strconv.Itoa(containerPort), Required: true, Internal: true})
+			}
 		case strings.Contains(portRaw, "$"):
 			return unsupportedTemplate(meta, raw, "porta do app definida por variável do Umbrel", sourceID), nil
 		}

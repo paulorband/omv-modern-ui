@@ -17,9 +17,10 @@ services:
       PUID: ${PUID}
       PGID: ${PGID}
       TZ: ${TZ}
-      WEBUI_PORT: "8080"
+      # qBittorrent 5 rejects requests whose Host port differs from its own, so both sides must match.
+      WEBUI_PORT: "${PORT:-8083}"
     ports:
-      - "${PORT:-8083}:8080"
+      - "${PORT:-8083}:${PORT:-8083}"
       - "6881:6881/tcp"
       - "6881:6881/udp"
     volumes:

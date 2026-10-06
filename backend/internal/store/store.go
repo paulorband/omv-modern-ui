@@ -373,7 +373,9 @@ func resolveFields(m catalog.Meta, in map[string]string) (vars []envKV, paths []
 			if convErr != nil || n < 1 || n > 65535 {
 				return nil, nil, nil, invalid("%q deve ser uma porta entre 1 e 65535", f.Label)
 			}
-			ports = append(ports, n)
+			if !f.Internal {
+				ports = append(ports, n)
+			}
 		case "bool":
 			if v != "true" && v != "false" {
 				return nil, nil, nil, invalid("%q deve ser true ou false", f.Label)
