@@ -21,6 +21,12 @@ Usuários são os do OMV. A nova UI faz login no OMV em nome do usuário e mant�
   deve invalidar a sessão local e responder `401`, para a UI voltar ao login.
 - R01.9 (S) Rate limit de login (ver R00.6).
 - R01.10 (M) Sessões ficam em memória; reiniciar o serviço exige novo login (aceitável no MVP).
+- R01.11 (M) O OMV expira a própria sessão por inatividade (padrão: poucos minutos), mesmo com a sessão local ainda
+  válida. Enquanto o usuário estiver ativo (requisição nos últimos 10 min), o sistema faz uma chamada leve ao OMV
+  (`Config.isDirty`) a cada 60 s para manter a sessão do OMV viva; sem atividade, ela expira normalmente.
+- R01.12 (M) Sessão do OMV expirada é reconhecida pelos códigos 5000/5001, por mensagens como "Session not
+  authenticated/expired/timeout" e por HTTP 401/403 de `/rpc.php`: a sessão local é descartada e a API responde 401
+  (a UI volta ao login), nunca um 502 genérico. Se o keep-alive detectar a expiração, a sessão local também é descartada.
 
 ## Contrato
 
@@ -49,3 +55,6 @@ Cookie de sessão devolvido em `Set-Cookie: PHPSESSID=...`.
 - A01.6 Mutação sem `X-Requested-With` retorna 403.
 - A01.7 Sessão acima do TTL deslizante retorna 401.
 - A01.8 UI: formulário de login com erro claro; rotas protegidas redirecionam ao login.
+- A01.9 Erro RPC com mensagem de sessão expirada (código qualquer) e HTTP 401 de `/rpc.php` viram `ErrSessionExpired`;
+  HTML com HTTP 200 continua sendo erro do OMV (não expiração).
+- A01.10 O keep-alive chama o OMV só para sessões ativas, descarta as que o OMV declarou expiradas e ignora outras falhas.

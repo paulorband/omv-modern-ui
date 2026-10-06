@@ -47,10 +47,12 @@ func buildDeps(cfg config.Config) server.Deps {
 	} else {
 		go cat.RefreshStale(context.Background(), 24*time.Hour)
 	}
+	authSvc := auth.NewService(omvClient)
+	go authSvc.KeepAlive(context.Background(), time.Minute, 10*time.Minute) // OMV times its own sessions out much sooner
 	appSvc := &apps.Service{Docker: dockerClient, Compose: composeRun, DataDir: cfg.DataDir, AppDataDir: cfg.AppDataDir}
 
 	return server.Deps{
-		Auth:      auth.NewService(omvClient),
+		Auth:      authSvc,
 		Collector: collector,
 		Hub:       system.NewHub(collector, 2*time.Second),
 		Docker:    dockerClient,

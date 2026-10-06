@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -73,7 +74,7 @@ func (c *RPCClient) do(ctx context.Context, cookies []*http.Cookie, service, met
 	}
 	var env rpcResponse
 	if err := json.Unmarshal(raw, &env); err != nil {
-		return nil, nil, fmt.Errorf("omv: unexpected response from %s/rpc.php (HTTP %d): is OMVHOME_OMV_URL pointing at OMV?", c.baseURL, resp.StatusCode)
+		return nil, nil, &httpStatusError{Status: resp.StatusCode, Base: c.baseURL}
 	}
 	return &env, resp.Cookies(), nil
 }
@@ -129,20 +130,22 @@ func (c *RPCClient) Login(ctx context.Context, username, password string) (*Sess
 }
 
 func (c *RPCClient) Logout(ctx context.Context, s *Session) error {
-	_, _, err := c.do(ctx, s.Cookies, "Session", "logout", nil)
+	_, _, err := c.do(ctx, s.cookies(), "Session", "logout", nil)
 	return err
 }
 
 func (c *RPCClient) Call(ctx context.Context, s *Session, service, method string, params, out any) error {
-	env, set, err := c.do(ctx, s.Cookies, service, method, params)
+	env, set, err := c.do(ctx, s.cookies(), service, method, params)
 	if err != nil {
+		var hs *httpStatusError
+		if errors.As(err, &hs) && (hs.Status == http.StatusUnauthorized || hs.Status == http.StatusForbidden) {
+			return ErrSessionExpired
+		}
 		return err
 	}
-	if len(set) > 0 {
-		s.Cookies = mergeCookies(s.Cookies, set)
-	}
+	s.updateCookies(set)
 	if env.Error != nil {
-		if env.Error.Code == codeSessionNotAuthenticated || env.Error.Code == codeSessionTimeout {
+		if isSessionError(env.Error.Code, env.Error.Message) {
 			return ErrSessionExpired
 		}
 		return &RPCError{Code: env.Error.Code, Message: env.Error.Message}
@@ -154,4 +157,25 @@ func (c *RPCClient) Call(ctx context.Context, s *Session, service, method string
 		return fmt.Errorf("omv: decode %s.%s: %w", service, method, err)
 	}
 	return nil
+}
+
+// httpStatusError is a /rpc.php answer that is not the JSON envelope (HTML login page, proxy error…).
+type httpStatusError struct {
+	Status int
+	Base   string
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("omv: unexpected response from %s/rpc.php (HTTP %d): is OMVHOME_OMV_URL pointing at OMV?", e.Base, e.Status)
+}
+
+// isSessionError recognizes "not logged in / session timed out" answers: by the known codes and, since
+// codes differ between OMV versions, by message (SPEC-01 R01.12).
+func isSessionError(code int, msg string) bool {
+	if code == codeSessionNotAuthenticated || code == codeSessionTimeout {
+		return true
+	}
+	m := strings.ToLower(msg)
+	return strings.Contains(m, "session") && (strings.Contains(m, "not authenticated") || strings.Contains(m, "expired") ||
+		strings.Contains(m, "timeout") || strings.Contains(m, "timed out") || strings.Contains(m, "not logged"))
 }

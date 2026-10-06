@@ -7,15 +7,34 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 )
 
 // Session is an authenticated OMV session owned by one user.
 type Session struct {
-	// Cookies are the session cookies OMV set at login, replayed on every call.
+	// Cookies are the session cookies OMV set at login, replayed on every call. Concurrent code must
+	// go through cookies and updateCookies: calls on one session may overlap.
 	Cookies  []*http.Cookie
 	ID       string
 	Username string
 	Role     string
+
+	mu sync.Mutex
+}
+
+func (s *Session) cookies() []*http.Cookie {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]*http.Cookie(nil), s.Cookies...)
+}
+
+func (s *Session) updateCookies(set []*http.Cookie) {
+	if len(set) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Cookies = mergeCookies(s.Cookies, set)
 }
 
 // IsAdmin reports whether the OMV user has the administrator role.

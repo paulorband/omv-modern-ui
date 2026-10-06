@@ -261,3 +261,46 @@ func (s *Service) MeHandler() httpx.Handler {
 		return nil
 	}
 }
+
+// KeepAlive keeps the OMV sessions of active users from timing out on OMV's own, much shorter, idle
+// limit (SPEC-01 R01.11): every `every` it makes a cheap call for each session used within
+// activeWithin. Sessions OMV declares expired are dropped, so the UI goes back to the login page.
+func (s *Service) KeepAlive(ctx context.Context, every, activeWithin time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			s.PingActive(ctx, activeWithin)
+		}
+	}
+}
+
+// PingActive is one KeepAlive round.
+func (s *Service) PingActive(ctx context.Context, activeWithin time.Duration) {
+	s.mu.Lock()
+	now := s.now()
+	var active []*Session
+	for _, sess := range s.items {
+		if now.Sub(sess.lastSeen) <= activeWithin && now.Sub(sess.lastSeen) <= s.idle && now.Sub(sess.created) <= s.abs {
+			active = append(active, sess)
+		}
+	}
+	s.mu.Unlock()
+
+	for _, sess := range active {
+		err := s.omv.Call(ctx, sess.OMV, "Config", "isDirty", nil, nil)
+		switch {
+		case err == nil:
+		case errors.Is(err, omv.ErrSessionExpired):
+			s.mu.Lock()
+			delete(s.items, sess.Token)
+			s.mu.Unlock()
+			slog.Info("sessão do OMV expirada; sessão local descartada", "user", sess.User.Username)
+		default:
+			slog.Debug("keep-alive do OMV falhou", "user", sess.User.Username, "err", err)
+		}
+	}
+}
