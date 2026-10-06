@@ -152,3 +152,5 @@ func (m *MockRunner) Down(_ context.Context, project, _ string) error {
 }
 
 func (m *MockRunner) SeedDir(context.Context, string, string, string) error { return nil }
+
+func (m *MockRunner) ImageUser(context.Context, string) (int, int, bool) { return 0, 0, false }

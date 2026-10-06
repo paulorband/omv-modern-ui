@@ -227,3 +227,5 @@ func TestUninstallUnmanagedRemovesContainers(t *testing.T) {
 }
 
 func (f *fakeCompose) SeedDir(context.Context, string, string, string) error { return nil }
+
+func (f *fakeCompose) ImageUser(context.Context, string) (int, int, bool) { return 0, 0, false }

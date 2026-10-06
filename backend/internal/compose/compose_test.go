@@ -185,3 +185,60 @@ func TestSeedDirRejectsSuspiciousArguments(t *testing.T) {
 		}
 	}
 }
+
+// imageExec fakes `docker image inspect`, `pull` and `run ... id`.
+func imageExec(user string, pulled bool, ids map[string]string) (*ExecRunner, *[]string) {
+	var log []string
+	return &ExecRunner{Exec: func(_ context.Context, _ string, args []string, onLine func(string)) error {
+		log = append(log, strings.Join(args, " "))
+		switch {
+		case args[0] == "image" && args[1] == "inspect":
+			if !pulled {
+				pulled = false
+				return errors.New("No such image")
+			}
+			onLine(user)
+		case args[0] == "pull":
+			pulled = true
+		case args[0] == "run":
+			onLine(ids[args[len(args)-2]+args[len(args)-1]]) // e.g. "-ufilebrowser"
+		}
+		return nil
+	}}, &log
+}
+
+func TestImageUser(t *testing.T) { // A09.11
+	ctx := context.Background()
+	cases := []struct {
+		name, user string
+		pulled     bool
+		ids        map[string]string
+		uid, gid   int
+		ok         bool
+	}{
+		{"numeric", "1000", true, nil, 1000, -1, true},
+		{"numeric with group", "1000:100", true, nil, 1000, 100, true},
+		{"root", "", true, nil, 0, 0, false},
+		{"explicit root", "0:0", true, nil, 0, 0, false},
+		{"name resolved inside the image", "filebrowser", true, map[string]string{"-ufilebrowser": "1000", "-gfilebrowser": "1001"}, 1000, 1001, true},
+		{"name with numeric group", "app:20", true, map[string]string{"-uapp": "999"}, 999, 20, true},
+		{"not pulled yet", "1000", false, nil, 1000, -1, true},
+		{"unresolvable name", "ghost", true, map[string]string{}, 0, 0, false},
+		{"hostile name", "$(reboot)", true, nil, 0, 0, false},
+	}
+	for _, c := range cases {
+		r, _ := imageExec(c.user, c.pulled, c.ids)
+		uid, gid, ok := r.ImageUser(ctx, "img:1")
+		if uid != c.uid || gid != c.gid || ok != c.ok {
+			t.Errorf("%s: got %d %d %v, want %d %d %v", c.name, uid, gid, ok, c.uid, c.gid, c.ok)
+		}
+	}
+	if _, _, ok := (&ExecRunner{Exec: func(context.Context, string, []string, func(string)) error { return errors.New("boom") }}).ImageUser(ctx, "img"); ok {
+		t.Error("docker failures must mean unknown")
+	}
+	r, log := imageExec("1000", false, nil)
+	r.ImageUser(ctx, "img:1")
+	if len(*log) != 3 || !strings.HasPrefix((*log)[1], "pull -q") {
+		t.Errorf("an image that is not local is pulled once, then inspected again: %q", *log)
+	}
+}

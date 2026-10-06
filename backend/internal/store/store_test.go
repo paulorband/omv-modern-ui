@@ -765,3 +765,72 @@ func TestSeedFailureOnlyWarns(t *testing.T) {
 		t.Errorf("the user should see the warning in the install log: %+v", evs)
 	}
 }
+
+// userCompose reports a fixed image user for every image.
+type userCompose struct {
+	compose.Runner
+	uid, gid int
+	ok       bool
+}
+
+func (u userCompose) ImageUser(context.Context, string) (int, int, bool) { return u.uid, u.gid, u.ok }
+
+func TestAppDataOwnersFollowTheImageUserWhenComposeHasNone(t *testing.T) { // A09.11
+	app := filepath.Join(t.TempDir(), "x")
+	yml := "services:\n  a:\n    image: i/a\n    volumes: [\"${APPDATA}/a:/a\"]\n  b:\n    image: i/b\n    user: '33'\n    volumes: [\"${APPDATA}/b:/b\"]\n  c:\n    image: i/c\n    user: nginx\n    volumes: [\"${APPDATA}/c:/c\"]\n  d:\n    image: ${IMG}\n    volumes: [\"${APPDATA}/d:/d\"]\n"
+	var asked []string
+	got := map[string][2]int{}
+	for _, o := range appDataOwnersFor([]byte(yml), app, func(image string) (int, int, bool) { asked = append(asked, image); return 1000, 1000, true }) {
+		got[filepath.Base(o.path)] = [2]int{o.uid, o.gid}
+	}
+	want := map[string][2]int{"a": {1000, 1000}, "b": {33, -1}} // c has a non-numeric explicit user, d an unresolvable image
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	if !reflect.DeepEqual(asked, []string{"i/a"}) {
+		t.Errorf("the image is only consulted when the compose sets no user: %v", asked)
+	}
+}
+
+func TestSourceAppDataFoldersBelongToTheImageUser(t *testing.T) { // A09.11: FileBrowser Quantum runs as filebrowser (1000)
+	h, _ := newHarness(t)
+	h.inst.Compose = userCompose{Runner: h.inst.Compose, uid: 1000, gid: 1000, ok: true}
+	h.inst.MkdirAll = func(p string) error { return os.MkdirAll(p, 0o755) }
+	type ch struct {
+		path     string
+		uid, gid int
+	}
+	var chowns []ch
+	h.inst.Chown = func(p string, uid, gid int) error { chowns = append(chowns, ch{p, uid, gid}); return nil }
+
+	job, err := h.inst.start(context.Background(), seedPlan("fb2", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait(t, job)
+	data := filepath.Join(h.inst.Apps.AppDataDir, "fb2", "data")
+	found := false
+	for _, c := range chowns {
+		found = found || c == (ch{data, 1000, 1000})
+	}
+	if !found {
+		t.Fatalf("data folder must be handed to the image user: %+v", chowns)
+	}
+
+	// root images and built-in apps are untouched
+	for name, plan := range map[string]plan{"root": seedPlan("rootimg", true), "builtin": seedPlan("builtin2", false)} {
+		h2, _ := newHarness(t)
+		h2.inst.Compose = userCompose{Runner: h2.inst.Compose, uid: 1000, gid: 1000, ok: name == "builtin"}
+		h2.inst.MkdirAll = func(p string) error { return os.MkdirAll(p, 0o755) }
+		called := false
+		h2.inst.Chown = func(string, int, int) error { called = true; return nil }
+		j, err := h2.inst.start(context.Background(), plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wait(t, j)
+		if called {
+			t.Errorf("%s: no chown expected", name)
+		}
+	}
+}

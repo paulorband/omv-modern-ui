@@ -99,6 +99,9 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
   vez, um bind mount não). Para apps de fontes externas, antes do `compose up` cada pasta de bind em `APPDATA` que
   esteja vazia recebe o conteúdo que a imagem tem no caminho montado (`docker create` + `docker cp -a`), e só depois
   ocorre o ajuste de dono de R09.10. Apps embutidos não são afetados.
+- R09.12 (M) Apps de fontes externas cujo serviço não define `user:` rodam como o `USER` da imagem (ex.: `filebrowser`,
+  UID 1000). As pastas de bind em `APPDATA` desse serviço recebem `chown` para esse usuário (UID numérico, ou nome
+  resolvido com `id` dentro da imagem); imagens que rodam como root não mudam nada. Vale `user:` do compose quando houver.
 - R09.10 (M) Antes do `compose up`, para cada serviço com `user:` numérico (`1000`, `1000:100`), as pastas
   de bind dentro de `APPDATA` usadas por ele são criadas e recebem `chown` para esse uid:gid. Assim o Docker não
   as cria como root e o app consegue gravar. Nomes de usuário, caminhos fora de `APPDATA` e arquivos
@@ -120,6 +123,8 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
 - A09.10 App de fonte com bind mount `${APPDATA}/…` sobre um diretório que a imagem preenche (ex.: FileBrowser Quantum
   em `/home/filebrowser/data`): se a pasta do host está vazia, o conteúdo da imagem é copiado para ela antes do
   `compose up`; pasta já preenchida, arquivos, caminhos que a imagem não tem e falha na cópia não bloqueiam nada.
+- A09.11 Serviço sem `user:` cuja imagem tem `USER 1000`: as pastas de bind em `${APPDATA}` ficam com dono 1000, e uma
+  imagem root (ou desconhecida) não gera `chown`.
 - A09.9 Serviço com `user: <uid>[:<gid>]` numérico e volume em `${APPDATA}/…`: a pasta é criada antes do
   `compose up` e entregue (recursivamente) a esse uid:gid; serviços sem `user` numérico não são tocados;
   falha de `chown` só gera aviso.

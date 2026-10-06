@@ -46,6 +46,12 @@ func parseUser(v any) (uid, gid int, ok bool) {
 // appDataOwners lists the bind-mounted folders under appData whose service runs as a numeric user.
 // Services without a numeric `user:` are left alone: their images fix permissions themselves.
 func appDataOwners(rendered []byte, appData string) []dataOwner {
+	return appDataOwnersFor(rendered, appData, nil)
+}
+
+// appDataOwnersFor is appDataOwners plus, when imageUser is given, the image's own USER for services
+// that set no `user:` (SPEC-09 R09.12). Images that run as root report ok=false and are left alone.
+func appDataOwnersFor(rendered []byte, appData string, imageUser func(image string) (uid, gid int, ok bool)) []dataOwner {
 	var doc struct {
 		Services map[string]map[string]any `yaml:"services"`
 	}
@@ -62,6 +68,11 @@ func appDataOwners(rendered []byte, appData string) []dataOwner {
 	for _, n := range names {
 		svc := doc.Services[n]
 		uid, gid, ok := parseUser(svc["user"])
+		if !ok && imageUser != nil && svc["user"] == nil {
+			if image, _ := svc["image"].(string); image != "" && !strings.Contains(image, "$") {
+				uid, gid, ok = imageUser(strings.TrimSpace(image))
+			}
+		}
 		if !ok {
 			continue
 		}

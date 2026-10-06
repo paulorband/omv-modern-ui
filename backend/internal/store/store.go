@@ -276,11 +276,7 @@ func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
 			return nil, fmt.Errorf("criar %s: %w", d, err)
 		}
 	}
-	var seeds []seedMount
-	if p.seed {
-		seeds = appDataSeeds(rendered, appData)
-	}
-	owners := appDataOwners(rendered, appData)
+	prep := dataPrep{rendered: rendered, appData: appData, source: p.seed}
 
 	// 4. compose up in the background
 	job := newJob(id)
@@ -289,16 +285,15 @@ func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
 	i.pruneJobsLocked()
 	i.jobs[id] = job
 	i.mu.Unlock()
-	go i.run(job, id, dir, seeds, owners)
+	go i.run(job, id, dir, prep)
 	return job, nil
 }
 
-func (i *Installer) run(job *Job, id, dir string, seeds []seedMount, owners []dataOwner) {
+func (i *Installer) run(job *Job, id, dir string, prep dataPrep) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	job.emit(Event{Type: "starting", Message: "Iniciando instalação de " + id})
-	i.seedFromImages(ctx, job, seeds)
-	i.prepareOwners(owners) // after seeding, so copied files get the right owner too
+	i.prepareData(ctx, job, prep)
 	project := compose.ProjectName(id)
 	if err := i.Compose.Up(ctx, project, dir, func(line string) { job.emit(lineEvent(line)) }); err != nil {
 		slog.Warn("install failed", "app", id, "err", err)

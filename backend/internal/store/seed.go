@@ -89,3 +89,20 @@ func (i *Installer) seedFromImages(ctx context.Context, job *Job, seeds []seedMo
 		}
 	}
 }
+
+// dataPrep is what must happen to the data folders before `compose up`. source is true for apps that
+// come from a custom source: only they get image defaults and the image's own user (SPEC-09).
+type dataPrep struct {
+	rendered []byte
+	appData  string
+	source   bool
+}
+
+func (i *Installer) prepareData(ctx context.Context, job *Job, p dataPrep) {
+	var imageUser func(string) (int, int, bool)
+	if p.source {
+		i.seedFromImages(ctx, job, appDataSeeds(p.rendered, p.appData))
+		imageUser = func(image string) (int, int, bool) { return i.Compose.ImageUser(ctx, image) }
+	}
+	i.prepareOwners(appDataOwnersFor(p.rendered, p.appData, imageUser)) // after seeding: copied files get the owner too
+}

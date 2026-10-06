@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -35,6 +36,8 @@ type Runner interface {
 	// SeedDir copies what image has at containerPath into hostDir, as a named volume would on first
 	// use. A path the image does not have is not an error (SPEC-09 R09.11).
 	SeedDir(ctx context.Context, image, containerPath, hostDir string) error
+	// ImageUser reports the numeric uid:gid an image runs as (its USER); ok is false for root or when unknown.
+	ImageUser(ctx context.Context, image string) (uid, gid int, ok bool)
 }
 
 // Executor runs `docker <args...>` in dir, reporting each output line. Tests replace it.
@@ -148,4 +151,55 @@ func (r *ExecRunner) SeedDir(ctx context.Context, image, containerPath, hostDir 
 		return nil
 	}
 	return err
+}
+
+var userNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_.-]*$`)
+
+// lastLine runs docker and returns the last non-empty output line.
+func (r *ExecRunner) lastLine(ctx context.Context, args ...string) (string, error) {
+	var last string
+	err := r.Exec(ctx, "", args, func(line string) {
+		if l := strings.TrimSpace(line); l != "" {
+			last = l
+		}
+	})
+	return last, err
+}
+
+func (r *ExecRunner) ImageUser(ctx context.Context, image string) (int, int, bool) {
+	if image == "" || strings.HasPrefix(image, "-") {
+		return 0, 0, false
+	}
+	user, err := r.lastLine(ctx, "image", "inspect", "-f", "{{.Config.User}}", "--", image)
+	if err != nil { // not pulled yet
+		if r.Exec(ctx, "", []string{"pull", "-q", "--", image}, nil) != nil {
+			return 0, 0, false
+		}
+		if user, err = r.lastLine(ctx, "image", "inspect", "-f", "{{.Config.User}}", "--", image); err != nil {
+			return 0, 0, false
+		}
+	}
+	name, group, _ := strings.Cut(user, ":")
+	uid, uerr := strconv.Atoi(name)
+	if uerr != nil { // a name: ask the image itself
+		if !userNameRe.MatchString(name) {
+			return 0, 0, false
+		}
+		out, err := r.lastLine(ctx, "run", "--rm", "--entrypoint", "id", "--", image, "-u", name)
+		if uid, err = strconv.Atoi(out); err != nil {
+			return 0, 0, false
+		}
+	}
+	gid := -1
+	switch g, gerr := strconv.Atoi(group); {
+	case group != "" && gerr == nil:
+		gid = g
+	case group == "" && uerr != nil:
+		if out, err := r.lastLine(ctx, "run", "--rm", "--entrypoint", "id", "--", image, "-g", name); err == nil {
+			if g, err := strconv.Atoi(out); err == nil {
+				gid = g
+			}
+		}
+	}
+	return uid, gid, uid > 0
 }
