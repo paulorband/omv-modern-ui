@@ -225,3 +225,5 @@ func TestUninstallUnmanagedRemovesContainers(t *testing.T) {
 		t.Fatalf("container should be removed: %v", err)
 	}
 }
+
+func (f *fakeCompose) SeedDir(context.Context, string, string, string) error { return nil }

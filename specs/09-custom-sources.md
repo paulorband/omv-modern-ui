@@ -95,6 +95,10 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
   URL, atualizar, remover); cards de fonte externa mostram o nome da fonte e "Incompatível" quando for
   o caso. Página do app: avisos, motivo da incompatibilidade (botão desabilitado) e checkbox para apps
   inseguros.
+- R09.11 (M) Bind mounts sobre diretórios da imagem escondem o conteúdo dela (um volume nomeado o copiaria na primeira
+  vez, um bind mount não). Para apps de fontes externas, antes do `compose up` cada pasta de bind em `APPDATA` que
+  esteja vazia recebe o conteúdo que a imagem tem no caminho montado (`docker create` + `docker cp -a`), e só depois
+  ocorre o ajuste de dono de R09.10. Apps embutidos não são afetados.
 - R09.10 (M) Antes do `compose up`, para cada serviço com `user:` numérico (`1000`, `1000:100`), as pastas
   de bind dentro de `APPDATA` usadas por ele são criadas e recebem `chown` para esse uid:gid. Assim o Docker não
   as cria como root e o app consegue gravar. Nomes de usuário, caminhos fora de `APPDATA` e arquivos
@@ -113,6 +117,9 @@ Se nenhum marcador existir, a fonte é rejeitada (`400`).
 - A09.6 URL com esquema inválido ou sem marcador de formato → 400.
 - A09.7 Falha de refresh mantém o catálogo anterior.
 - A09.8 UI: adicionar fonte mostra-a na lista; app incompatível tem botão desabilitado.
+- A09.10 App de fonte com bind mount `${APPDATA}/…` sobre um diretório que a imagem preenche (ex.: FileBrowser Quantum
+  em `/home/filebrowser/data`): se a pasta do host está vazia, o conteúdo da imagem é copiado para ela antes do
+  `compose up`; pasta já preenchida, arquivos, caminhos que a imagem não tem e falha na cópia não bloqueiam nada.
 - A09.9 Serviço com `user: <uid>[:<gid>]` numérico e volume em `${APPDATA}/…`: a pasta é criada antes do
   `compose up` e entregue (recursivamente) a esse uid:gid; serviços sem `user` numérico não são tocados;
   falha de `chown` só gera aviso.

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -631,5 +633,135 @@ func TestQbittorrentUsesSamePortOnBothSides(t *testing.T) {
 	yml, _ := os.ReadFile(filepath.Join(h.inst.Apps.ProjectDir("qbittorrent"), compose.ComposeFile))
 	if !strings.Contains(string(env), "PORT=8099") || !strings.Contains(string(yml), `${PORT:-8083}:${PORT:-8083}`) || !strings.Contains(string(yml), `WEBUI_PORT: ${PORT:-8083}`) {
 		t.Fatalf("env:\n%s\ncompose:\n%s", env, yml)
+	}
+}
+
+type seedCall struct{ image, containerPath, hostDir string }
+
+// seedingCompose records SeedDir calls and can write a file like the image's default config.
+type seedingCompose struct {
+	compose.Runner
+	mu    sync.Mutex
+	calls []seedCall
+	fail  error
+}
+
+func (s *seedingCompose) SeedDir(_ context.Context, image, cp, host string) error {
+	s.mu.Lock()
+	s.calls = append(s.calls, seedCall{image, cp, host})
+	s.mu.Unlock()
+	if s.fail != nil {
+		return s.fail
+	}
+	return os.WriteFile(filepath.Join(host, "config.yaml"), []byte("default: true\n"), 0o644)
+}
+
+func seedPlan(id string, seed bool) plan {
+	yml := "services:\n  app:\n    image: gtstef/filebrowser:1.5\n    volumes:\n      - ${APPDATA}/data:/home/filebrowser/data\n      - ${APPDATA}/srv:/srv\n      - ${APPDATA}/conf.json:/etc/conf.json\n      - /srv/media:/media\n      - /etc/localtime:/etc/localtime:ro\n"
+	return plan{meta: catalog.Meta{ID: id, Title: id, Main: "app"}, composeRaw: yml, seed: seed}
+}
+
+func TestAppDataSeeds(t *testing.T) { // A09.10
+	app := filepath.Join(t.TempDir(), "x")
+	yml := `services:
+  app:
+    image: gtstef/filebrowser:1.5
+    volumes:
+      - ${APPDATA}/data:/home/filebrowser/data
+      - ${APPDATA}/srv:/srv:ro
+      - ${APPDATA}/conf.json:/etc/conf.json
+      - ${APPDATA}/data:/again
+      - /srv/media:/media
+      - named:/vol
+      - type: bind
+        source: ${APPDATA}/maps
+        target: /maps
+      - type: volume
+        source: v
+        target: /v
+  db:
+    image: ${DB_IMAGE}
+    volumes:
+      - ${APPDATA}/db:/var/lib/db
+`
+	got := appDataSeeds([]byte(yml), app)
+	want := []seedMount{
+		{"gtstef/filebrowser:1.5", "/home/filebrowser/data", filepath.Join(app, "data")},
+		{"gtstef/filebrowser:1.5", "/maps", filepath.Join(app, "maps")},
+		{"gtstef/filebrowser:1.5", "/srv", filepath.Join(app, "srv")},
+	}
+	sort.Slice(got, func(i, j int) bool { return got[i].hostDir < got[j].hostDir })
+	sort.Slice(want, func(i, j int) bool { return want[i].hostDir < want[j].hostDir })
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+}
+
+func TestSourceAppSeedsEmptyDataFoldersFromImage(t *testing.T) { // A09.10
+	h, _ := newHarness(t)
+	sc := &seedingCompose{Runner: h.inst.Compose}
+	h.inst.Compose = sc
+	h.inst.MkdirAll = func(p string) error { return os.MkdirAll(p, 0o755) }
+	data := filepath.Join(h.inst.Apps.AppDataDir, "fb", "data")
+	if err := os.MkdirAll(filepath.Join(h.inst.Apps.AppDataDir, "fb", "srv"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(h.inst.Apps.AppDataDir, "fb", "srv", "mine.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	job, err := h.inst.start(context.Background(), seedPlan("fb", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	evs := wait(t, job)
+	if len(sc.calls) != 1 || sc.calls[0] != (seedCall{"gtstef/filebrowser:1.5", "/home/filebrowser/data", data}) {
+		t.Fatalf("seed calls (srv already has data, files and /srv/media must be skipped): %+v", sc.calls)
+	}
+	if _, err := os.Stat(filepath.Join(data, "config.yaml")); err != nil {
+		t.Error("default config was not copied")
+	}
+	found := false
+	for _, e := range evs {
+		found = found || strings.Contains(e.Message, "Copiando os arquivos padrão")
+	}
+	if !found {
+		t.Errorf("progress should say it is copying defaults: %+v", evs)
+	}
+}
+
+func TestBuiltInAppsAreNotSeeded(t *testing.T) {
+	h, _ := newHarness(t)
+	sc := &seedingCompose{Runner: h.inst.Compose}
+	h.inst.Compose = sc
+	h.inst.MkdirAll = func(p string) error { return os.MkdirAll(p, 0o755) }
+	job, err := h.inst.start(context.Background(), seedPlan("builtin", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait(t, job)
+	if len(sc.calls) != 0 {
+		t.Fatalf("built-in apps keep their current behaviour: %+v", sc.calls)
+	}
+}
+
+func TestSeedFailureOnlyWarns(t *testing.T) {
+	h, _ := newHarness(t)
+	sc := &seedingCompose{Runner: h.inst.Compose, fail: errors.New("pull access denied")}
+	h.inst.Compose = sc
+	h.inst.MkdirAll = func(p string) error { return os.MkdirAll(p, 0o755) }
+	job, err := h.inst.start(context.Background(), seedPlan("fail", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	evs := wait(t, job)
+	if last := evs[len(evs)-1]; last.Type != "done" {
+		t.Fatalf("install must still finish: %+v", evs)
+	}
+	warned := false
+	for _, e := range evs {
+		warned = warned || strings.Contains(e.Message, "Aviso: não foi possível copiar")
+	}
+	if !warned {
+		t.Errorf("the user should see the warning in the install log: %+v", evs)
 	}
 }

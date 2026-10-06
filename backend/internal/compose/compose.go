@@ -32,6 +32,9 @@ type Runner interface {
 	Restart(ctx context.Context, project, dir string) error
 	Pull(ctx context.Context, project, dir string, onLine func(string)) error
 	Down(ctx context.Context, project, dir string) error
+	// SeedDir copies what image has at containerPath into hostDir, as a named volume would on first
+	// use. A path the image does not have is not an error (SPEC-09 R09.11).
+	SeedDir(ctx context.Context, image, containerPath, hostDir string) error
 }
 
 // Executor runs `docker <args...>` in dir, reporting each output line. Tests replace it.
@@ -120,3 +123,29 @@ func Interpolate(s string, vars map[string]string) string {
 
 // ErrUnavailable is returned when docker compose is not installed.
 var ErrUnavailable = errors.New("docker compose indisponível")
+
+var containerIDRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+func (r *ExecRunner) SeedDir(ctx context.Context, image, containerPath, hostDir string) error {
+	if image == "" || strings.HasPrefix(image, "-") || !strings.HasPrefix(containerPath, "/") || !filepath.IsAbs(hostDir) {
+		return fmt.Errorf("argumentos inválidos para copiar a pasta da imagem")
+	}
+	// `create` pulls the image when it is missing and never starts it, so no entrypoint runs.
+	var id string
+	if err := r.Exec(ctx, "", []string{"create", "--entrypoint", "true", "--", image}, func(line string) {
+		if l := strings.TrimSpace(line); containerIDRe.MatchString(l) {
+			id = l
+		}
+	}); err != nil {
+		return err
+	}
+	if id == "" {
+		return errors.New("docker create não retornou o id do container")
+	}
+	defer func() { _ = r.Exec(context.WithoutCancel(ctx), "", []string{"rm", "-f", id}, nil) }()
+	err := r.Exec(ctx, "", []string{"cp", "-a", id + ":" + strings.TrimRight(containerPath, "/") + "/.", hostDir}, nil)
+	if err != nil && strings.Contains(err.Error(), "Could not find the file") {
+		return nil
+	}
+	return err
+}

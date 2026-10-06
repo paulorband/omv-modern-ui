@@ -150,3 +150,5 @@ func (m *MockRunner) Down(_ context.Context, project, _ string) error {
 	m.Docker.RemoveByProject(project)
 	return nil
 }
+
+func (m *MockRunner) SeedDir(context.Context, string, string, string) error { return nil }

@@ -2,9 +2,11 @@ package compose
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"omvhome/internal/docker"
@@ -115,6 +117,71 @@ func TestMockRunnerCreatesContainersFromComposeFile(t *testing.T) {
 	for _, c := range cs {
 		if c.Labels[docker.ComposeProject] == "omvhome-demo" {
 			t.Errorf("container survived down: %s", c.Name)
+		}
+	}
+}
+
+func TestSeedDirCopiesImageContentsAndCleansUp(t *testing.T) { // A09.10
+	const id = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	var calls [][]string
+	r := &ExecRunner{Exec: func(_ context.Context, _ string, args []string, onLine func(string)) error {
+		calls = append(calls, args)
+		if args[0] == "create" && onLine != nil {
+			onLine("Unable to find image 'x' locally")
+			onLine(id)
+		}
+		return nil
+	}}
+	host := filepath.Join(t.TempDir(), "data")
+	if err := r.SeedDir(context.Background(), "gtstef/filebrowser:1", "/home/filebrowser/data/", host); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"create", "--entrypoint", "true", "--", "gtstef/filebrowser:1"},
+		{"cp", "-a", id + ":/home/filebrowser/data/.", host},
+		{"rm", "-f", id},
+	}
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls:\n got %q\nwant %q", calls, want)
+	}
+}
+
+func TestSeedDirIgnoresMissingPathButNotOtherErrors(t *testing.T) {
+	const id = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	run := func(cpErr error) (error, bool) {
+		removed := false
+		r := &ExecRunner{Exec: func(_ context.Context, _ string, args []string, onLine func(string)) error {
+			switch args[0] {
+			case "create":
+				onLine(id)
+			case "cp":
+				return cpErr
+			case "rm":
+				removed = true
+			}
+			return nil
+		}}
+		return r.SeedDir(context.Background(), "img", "/data", filepath.Join(t.TempDir(), "d")), removed
+	}
+	if err, removed := run(errors.New("docker cp falhou: Could not find the file /data in container")); err != nil || !removed {
+		t.Errorf("missing path: err=%v removed=%v", err, removed)
+	}
+	if err, removed := run(errors.New("disco cheio")); err == nil || !removed {
+		t.Errorf("real error must surface and still clean up: err=%v removed=%v", err, removed)
+	}
+}
+
+func TestSeedDirRejectsSuspiciousArguments(t *testing.T) {
+	r := &ExecRunner{Exec: func(context.Context, string, []string, func(string)) error {
+		t.Fatal("docker must not run")
+		return nil
+	}}
+	abs := filepath.Join(t.TempDir(), "d")
+	for _, c := range []struct{ image, path, host string }{
+		{"--privileged", "/d", abs}, {"", "/d", abs}, {"img", "relative", abs}, {"img", "/d", "rel/dir"},
+	} {
+		if err := r.SeedDir(context.Background(), c.image, c.path, c.host); err == nil || !strings.Contains(err.Error(), "inválidos") {
+			t.Errorf("%+v: %v", c, err)
 		}
 	}
 }

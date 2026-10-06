@@ -136,7 +136,7 @@ func (i *Installer) Install(ctx context.Context, id string, req InstallRequest) 
 	if hostPort > 0 {
 		ports = append([]int{hostPort}, ports...)
 	}
-	return i.start(ctx, plan{meta: t.Meta, composeRaw: t.Compose, fieldVars: vars, paths: paths, ports: ports, hostPort: hostPort, generate: t.Generate})
+	return i.start(ctx, plan{meta: t.Meta, composeRaw: t.Compose, fieldVars: vars, paths: paths, ports: ports, hostPort: hostPort, generate: t.Generate, seed: t.Source != ""})
 }
 
 // InstallCustom installs a user-supplied compose file (R05.7).
@@ -197,6 +197,7 @@ type plan struct {
 	ports      []int
 	hostPort   int
 	generate   []string // variables filled with random secrets (SPEC-09)
+	seed       bool     // copy image defaults into empty data folders (SPEC-09 R09.11)
 }
 
 func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
@@ -275,7 +276,11 @@ func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
 			return nil, fmt.Errorf("criar %s: %w", d, err)
 		}
 	}
-	i.prepareOwners(appDataOwners(rendered, appData))
+	var seeds []seedMount
+	if p.seed {
+		seeds = appDataSeeds(rendered, appData)
+	}
+	owners := appDataOwners(rendered, appData)
 
 	// 4. compose up in the background
 	job := newJob(id)
@@ -284,14 +289,16 @@ func (i *Installer) start(ctx context.Context, p plan) (*Job, error) {
 	i.pruneJobsLocked()
 	i.jobs[id] = job
 	i.mu.Unlock()
-	go i.run(job, id, dir)
+	go i.run(job, id, dir, seeds, owners)
 	return job, nil
 }
 
-func (i *Installer) run(job *Job, id, dir string) {
+func (i *Installer) run(job *Job, id, dir string, seeds []seedMount, owners []dataOwner) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	job.emit(Event{Type: "starting", Message: "Iniciando instalação de " + id})
+	i.seedFromImages(ctx, job, seeds)
+	i.prepareOwners(owners) // after seeding, so copied files get the right owner too
 	project := compose.ProjectName(id)
 	if err := i.Compose.Up(ctx, project, dir, func(line string) { job.emit(lineEvent(line)) }); err != nil {
 		slog.Warn("install failed", "app", id, "err", err)
