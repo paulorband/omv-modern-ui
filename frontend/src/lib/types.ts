@@ -105,6 +105,8 @@ export type StoreCard = {
   icon: string
   category: string
   installed: boolean
+  /** Id shared by the same app offered by several sources. */
+  group?: string
   /** Custom source id; absent for built-in apps. */
   source?: string
   unsupported?: boolean
@@ -120,6 +122,8 @@ export type EnvField = {
   /** Container-side port: validated, but not checked against host ports. */
   internal?: boolean
 }
+
+export type StoreVariant = { id: string; source: string }
 
 export type StoreDetail = {
   meta: {
@@ -142,6 +146,8 @@ export type StoreDetail = {
   /** Risky settings that need an explicit allowUnsafe. */
   unsafe?: string[]
   warnings?: string[]
+  /** The same app as offered by every source (including this one), built-in first. */
+  variants?: StoreVariant[]
 }
 
 export type InstallEvent = { type: 'starting' | 'pull' | 'log' | 'done' | 'error'; message?: string }

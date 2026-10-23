@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,6 +80,8 @@ type InstallRequest struct {
 	Env         map[string]string `json:"env"`
 	Port        int               `json:"port"`
 	AllowUnsafe bool              `json:"allowUnsafe"`
+	// Compose replaces the template compose when the user edited it before installing.
+	Compose string `json:"compose"`
 }
 
 type CustomRequest struct {
@@ -119,8 +122,25 @@ func (i *Installer) Install(ctx context.Context, id string, req InstallRequest) 
 	if t.Unsupported != "" {
 		return nil, invalid("app incompatível: %s", t.Unsupported)
 	}
-	if len(t.Unsafe) > 0 && !req.AllowUnsafe {
-		return nil, invalid("configurações inseguras exigem allowUnsafe: %s", strings.Join(t.Unsafe, "; "))
+	composeRaw, unsafe := t.Compose, t.Unsafe
+	if req.Compose != "" && req.Compose != t.Compose {
+		if len(req.Compose) > 256<<10 {
+			return nil, invalid("compose grande demais")
+		}
+		services, err := serviceNames(req.Compose)
+		if err != nil {
+			return nil, invalid("%s", err.Error())
+		}
+		if !slices.Contains(services, t.Meta.Main) {
+			return nil, invalid("o serviço principal %q precisa continuar no compose", t.Meta.Main)
+		}
+		if unsafe, err = unsafeReasons(req.Compose); err != nil {
+			return nil, invalid("%s", err.Error())
+		}
+		composeRaw = req.Compose
+	}
+	if len(unsafe) > 0 && !req.AllowUnsafe {
+		return nil, invalid("configurações inseguras exigem allowUnsafe: %s", strings.Join(unsafe, "; "))
 	}
 	vars, paths, ports, err := resolveFields(t.Meta, req.Env)
 	if err != nil {
@@ -136,7 +156,7 @@ func (i *Installer) Install(ctx context.Context, id string, req InstallRequest) 
 	if hostPort > 0 {
 		ports = append([]int{hostPort}, ports...)
 	}
-	return i.start(ctx, plan{meta: t.Meta, composeRaw: t.Compose, fieldVars: vars, paths: paths, ports: ports, hostPort: hostPort, generate: t.Generate, seed: t.Source != ""})
+	return i.start(ctx, plan{meta: t.Meta, composeRaw: composeRaw, fieldVars: vars, paths: paths, ports: ports, hostPort: hostPort, generate: t.Generate, seed: t.Source != ""})
 }
 
 // InstallCustom installs a user-supplied compose file (R05.7).

@@ -110,3 +110,19 @@ func TestRemoteCatalogMergesAndSurvivesFailures(t *testing.T) { // R05.8
 		t.Fatalf("embedded catalog must survive a dead remote, got %d", len(got))
 	}
 }
+
+func TestGroupByTitleAcrossEcosystems(t *testing.T) {
+	a := &Template{Meta: Meta{ID: "big-bear-casaos-2fauth", Title: "2FAuth"}}
+	b := &Template{Meta: Meta{ID: "2fauth", Title: "2FAuth"}}
+	c := &Template{Meta: Meta{ID: "adguard-host", Title: "AdGuard Home (HOST)"}}
+	d := &Template{Meta: Meta{ID: "adguard", Title: "AdGuard Home"}}
+	if a.group() != b.group() {
+		t.Errorf("same title must group: %q vs %q", a.group(), b.group())
+	}
+	if c.group() == d.group() {
+		t.Errorf("different titles must not group: %q", c.group())
+	}
+	if (&Template{Meta: Meta{ID: "x"}}).group() != "x" {
+		t.Error("empty title falls back to id")
+	}
+}

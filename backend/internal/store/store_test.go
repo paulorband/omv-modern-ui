@@ -834,3 +834,44 @@ func TestSourceAppDataFoldersBelongToTheImageUser(t *testing.T) { // A09.11: Fil
 		}
 	}
 }
+
+func TestInstallWithEditedCompose(t *testing.T) {
+	h, _ := newHarness(t)
+	ctx := context.Background()
+	tpl, err := h.inst.Catalog.Get(ctx, "uptime-kuma")
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := strings.Replace(tpl.Compose, "image:", "# editado\n    image:", 1)
+	if edited == tpl.Compose {
+		t.Fatal("test template has no image line")
+	}
+	job, err := h.inst.Install(ctx, "uptime-kuma", InstallRequest{Compose: edited})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait(t, job)
+	yml, _ := os.ReadFile(filepath.Join(h.inst.Apps.ProjectDir("uptime-kuma"), compose.ComposeFile))
+	if !strings.Contains(string(yml), "omvhome.app: uptime-kuma") {
+		t.Errorf("labels must still be injected:\n%s", yml)
+	}
+
+	var inv *InvalidError
+	if _, err := h.inst.Install(ctx, "syncthing", InstallRequest{Compose: "services:\n  other:\n    image: x\n"}); !errors.As(err, &inv) {
+		t.Errorf("main service removed: want InvalidError, got %v", err)
+	}
+}
+
+func TestInstallEditedComposeNeedsAllowUnsafe(t *testing.T) {
+	h, _ := newHarness(t)
+	ctx := context.Background()
+	tpl, _ := h.inst.Catalog.Get(ctx, "uptime-kuma")
+	edited := strings.Replace(tpl.Compose, "image:", "privileged: true\n    image:", 1)
+	var inv *InvalidError
+	if _, err := h.inst.Install(ctx, "uptime-kuma", InstallRequest{Compose: edited}); !errors.As(err, &inv) || !strings.Contains(err.Error(), "allowUnsafe") {
+		t.Fatalf("want allowUnsafe error, got %v", err)
+	}
+	if _, err := h.inst.Install(ctx, "uptime-kuma", InstallRequest{Compose: edited, AllowUnsafe: true}); err != nil {
+		t.Fatal(err)
+	}
+}

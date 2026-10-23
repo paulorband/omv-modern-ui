@@ -1,22 +1,24 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
-import { get, post } from '../lib/api'
+import { ApiError, get, post } from '../lib/api'
 import { initialValues, validateField, validatePort } from '../lib/install'
-import type { DockerStatus, EnvField, StoreDetail } from '../lib/types'
+import type { DockerStatus, EnvField, StoreDetail, StoreSource } from '../lib/types'
 import { AppIcon } from '../components/AppIcon'
 import { InstallProgress } from '../components/InstallProgress'
-import { Badge, Button, Card, ErrorBox, Field, Spinner, errorMessage, inputCls } from '../components/ui'
+import { Badge, Button, Card, ErrorBox, Field, Spinner, cx, errorMessage, inputCls } from '../components/ui'
 
 export function StoreApp() {
   const { id = '' } = useParams()
   const detail = useQuery({ queryKey: ['store', id], queryFn: ({ signal }) => get<StoreDetail>(`/store/apps/${id}`, signal) })
+  const location = useLocation()
+  const search = (location.state as { search?: string } | null)?.search ?? ''
   const status = useQuery({ queryKey: ['docker-status'], queryFn: ({ signal }) => get<DockerStatus>('/docker/status', signal) })
 
   return (
     <>
-      <Link to="/store" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg">
+      <Link to={`/store${search}`} className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg">
         <ArrowLeft className="h-4 w-4" aria-hidden /> Voltar para a loja
       </Link>
       {detail.isPending ? (
@@ -24,13 +26,13 @@ export function StoreApp() {
       ) : detail.isError ? (
         <ErrorBox error={detail.error} onRetry={() => void detail.refetch()} />
       ) : (
-        <Detail data={detail.data} composeOk={status.data?.composeAvailable ?? true} dockerOk={status.data?.available ?? true} />
+        <Detail key={detail.data.meta.id} data={detail.data} search={search} composeOk={status.data?.composeAvailable ?? true} dockerOk={status.data?.available ?? true} />
       )}
     </>
   )
 }
 
-function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: boolean; dockerOk: boolean }) {
+function Detail({ data, search, composeOk, dockerOk }: { data: StoreDetail; search: string; composeOk: boolean; dockerOk: boolean }) {
   const { meta } = data
   const fields = meta.env ?? []
   const qc = useQueryClient()
@@ -42,13 +44,20 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
   const [error, setError] = useState<string | null>(null)
   const [installing, setInstalling] = useState(false)
   const [allowUnsafe, setAllowUnsafe] = useState(false)
+  const [needsUnsafe, setNeedsUnsafe] = useState(false)
+  const [compose, setCompose] = useState(data.compose)
+  const [editing, setEditing] = useState(false)
+  const edited = compose !== data.compose
+  const sources = useQuery({ queryKey: ['store-sources'], queryFn: ({ signal }) => get<StoreSource[]>('/store/sources', signal) })
+  const sourceLabel = (id: string) => (id ? (sources.data?.find((x) => x.id === id)?.name ?? id) : 'OMV Home')
+  const variants = data.variants ?? []
   const unsafe = data.unsafe ?? []
   const warnings = data.warnings ?? []
 
   const errors: Record<string, string | undefined> = Object.fromEntries(fields.map((f) => [f.key, validateField(f, values[f.key] ?? '')]))
   const portError = validatePort(port)
   const hasErrors = Object.values(errors).some(Boolean) || !!portError
-  const canInstall = composeOk && dockerOk && !data.installed && !data.unsupported && (unsafe.length === 0 || allowUnsafe)
+  const canInstall = composeOk && dockerOk && !data.installed && !data.unsupported && (unsafe.length === 0 || allowUnsafe) && (!needsUnsafe || allowUnsafe)
 
   async function install() {
     setTouched(true)
@@ -56,11 +65,12 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
     setError(null)
     setSubmitting(true)
     try {
-      await post(`/store/apps/${meta.id}/install`, { env: values, port: port ? Number(port) : 0, ...(allowUnsafe ? { allowUnsafe: true } : {}) })
+      await post(`/store/apps/${meta.id}/install`, { env: values, port: port ? Number(port) : 0, ...(edited ? { compose } : {}), ...(allowUnsafe ? { allowUnsafe: true } : {}) })
       void qc.invalidateQueries({ queryKey: ['installs'] })
       setInstalling(true)
     } catch (e) {
       setError(errorMessage(e))
+      if (e instanceof ApiError && e.message.includes('allowUnsafe')) setNeedsUnsafe(true)
     } finally {
       setSubmitting(false)
     }
@@ -84,10 +94,50 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
           </div>
         </div>
         <p className="mb-6 whitespace-pre-line break-words leading-relaxed">{meta.description}</p>
-        <details className="rounded-xl border border-line bg-surface p-3 text-sm">
-          <summary className="cursor-pointer font-medium">Ver docker-compose</summary>
-          <pre className="mt-3 max-w-full overflow-auto font-mono text-xs">{data.compose}</pre>
-        </details>
+        {variants.length > 1 && (
+          <div className="mb-6" role="group" aria-label="Fonte do app">
+            <p className="mb-2 text-sm font-medium">Disponível em {variants.length} fontes</p>
+            <div className="flex flex-wrap gap-2">
+              {variants.map((v) => (
+                <Link
+                  key={v.id}
+                  to={`/store/${v.id}`}
+                  state={{ search }}
+                  replace
+                  aria-current={v.id === meta.id ? 'true' : undefined}
+                  className={cx('rounded-full px-3 py-1 text-sm transition', v.id === meta.id ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted hover:text-fg')}
+                >
+                  {sourceLabel(v.source)}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="rounded-xl border border-line bg-surface p-3 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">docker-compose{edited && ' (editado)'}</span>
+            <span className="flex gap-2">
+              {edited && (
+                <Button type="button" variant="ghost" onClick={() => setCompose(data.compose)}>
+                  Restaurar original
+                </Button>
+              )}
+              {!data.installed && !data.unsupported && (
+                <Button type="button" onClick={() => setEditing((e) => !e)}>
+                  {editing ? 'Ocultar' : 'Editar'}
+                </Button>
+              )}
+            </span>
+          </div>
+          {editing ? (
+            <textarea aria-label="docker-compose.yml" className={cx(inputCls, 'mt-3 h-96 font-mono text-xs')} spellCheck={false} value={compose} onChange={(e) => setCompose(e.target.value)} />
+          ) : (
+            <details>
+              <summary className="mt-2 cursor-pointer text-muted">Ver docker-compose</summary>
+              <pre className="mt-3 max-w-full overflow-auto font-mono text-xs">{compose}</pre>
+            </details>
+          )}
+        </div>
       </div>
 
       <Card className="h-fit p-5">
@@ -130,11 +180,11 @@ function Detail({ data, composeOk, dockerOk }: { data: StoreDetail; composeOk: b
                 ))}
               </ul>
             )}
-            {unsafe.length > 0 && !data.unsupported && (
+            {(unsafe.length > 0 || needsUnsafe) && !data.unsupported && (
               <label className="flex items-start gap-2 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">
                 <input type="checkbox" className="mt-1" checked={allowUnsafe} onChange={(e) => setAllowUnsafe(e.target.checked)} />
                 <span>
-                  Permitir configurações inseguras ({unsafe.join("; ")}). Isso dá ao container acesso amplo ao servidor.
+                  Permitir configurações inseguras{unsafe.length > 0 ? ` (${unsafe.join('; ')})` : ''}. Isso dá ao container acesso amplo ao servidor.
                 </span>
               </label>
             )}

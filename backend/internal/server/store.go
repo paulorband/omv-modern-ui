@@ -75,6 +75,7 @@ func (d Deps) registerStore(api *http.ServeMux, protect func(http.Handler) http.
 		httpx.JSON(w, http.StatusOK, map[string]any{
 			"meta": t.Meta, "compose": t.Compose, "installed": installed[t.Meta.ID],
 			"source": t.Source, "sourceName": d.Catalog.SourceName(t.Source),
+			"variants":    d.Catalog.Variants(r.Context(), t.Meta.ID),
 			"unsupported": t.Unsupported, "unsafe": nonNil(t.Unsafe), "warnings": nonNil(t.Warnings),
 		})
 		return nil

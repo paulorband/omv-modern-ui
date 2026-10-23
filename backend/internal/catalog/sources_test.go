@@ -402,6 +402,17 @@ func TestIDClashes(t *testing.T) { // R09.7
 	if got, err := c.Get(ctx, "shared-c"); err != nil || got.Source != "c" {
 		t.Errorf("shared-c: %+v %v", got, err)
 	}
+	if vs := c.Variants(ctx, "shared-c"); len(vs) != 2 || vs[0].ID != "shared" || vs[1].ID != "shared-c" {
+		t.Errorf("variants: %+v", vs)
+	}
+	if vs := c.Variants(ctx, "jellyfin-a"); len(vs) != 2 || vs[0].Source != "" || vs[1].Source != "a" {
+		t.Errorf("built-in first: %+v", vs)
+	}
+	for _, s := range c.List(ctx, "", "", "") {
+		if s.ID == "jellyfin-a" && s.Group != "jellyfin" {
+			t.Errorf("group: %+v", s)
+		}
+	}
 }
 
 func TestRefreshStale(t *testing.T) { // R09.8

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Layers, Plus, Search } from 'lucide-react'
 import { ApiError, get, post } from '../lib/api'
@@ -22,12 +22,45 @@ export function filterStore(cards: StoreCard[], query: string, category: string,
   )
 }
 
+export type StoreGroup = { id: string; primary: StoreCard; cards: StoreCard[] }
+
+/** Collapses the same app offered by several sources into one entry; the built-in one leads. */
+export function groupStore(cards: StoreCard[]): StoreGroup[] {
+  const groups = new Map<string, StoreCard[]>()
+  for (const c of cards) {
+    const key = c.group ?? c.id
+    groups.set(key, [...(groups.get(key) ?? []), c])
+  }
+  return Array.from(groups, ([id, list]) => {
+    const sorted = [...list].sort((a, b) => Number(!!a.source) - Number(!!b.source))
+    return { id, primary: sorted[0], cards: sorted }
+  })
+}
+
+/** Keeps one filter in the URL (replacing the history entry) so it survives a trip to a detail page. */
+function useParam(key: string, fallback: string): [string, (v: string) => void] {
+  const [params, setParams] = useSearchParams()
+  const value = params.get(key) ?? fallback
+  const set = (v: string) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (v === fallback) next.delete(key)
+        else next.set(key, v)
+        return next
+      },
+      { replace: true },
+    )
+  return [value, set]
+}
+
 export function Store() {
-  const [query, setQuery] = useState('')
-  const [category, setCategory] = useState(ALL)
+  const location = useLocation()
+  const [query, setQuery] = useParam('q', '')
+  const [category, setCategory] = useParam('category', ALL)
   const [custom, setCustom] = useState(false)
   const [managing, setManaging] = useState(false)
-  const [source, setSource] = useState(ALL)
+  const [source, setSource] = useParam('source', ALL)
   const [limit, setLimit] = useState(120)
   const sources = useQuery({ queryKey: ['store-sources'], queryFn: ({ signal }) => get<StoreSource[]>('/store/sources', signal) })
   const sourceList = sources.data ?? []
@@ -35,7 +68,7 @@ export function Store() {
   const cards = useQuery({ queryKey: ['store'], queryFn: ({ signal }) => get<StoreCard[]>('/store/apps', signal) })
 
   const categories = useMemo(() => [ALL, ...Array.from(new Set((cards.data ?? []).map((c) => c.category))).sort()], [cards.data])
-  const visible = useMemo(() => filterStore(cards.data ?? [], query, category, source), [cards.data, query, category, source])
+  const visible = useMemo(() => groupStore(filterStore(cards.data ?? [], query, category, source)), [cards.data, query, category, source])
 
   return (
     <>
@@ -97,19 +130,25 @@ export function Store() {
         </EmptyState>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.slice(0, limit).map((c) => (
-            <li key={c.id}>
-              <Link to={`/store/${c.id}`} className="block h-full rounded-2xl focus-visible:outline-offset-4">
+          {visible.slice(0, limit).map(({ id, primary: c, cards: members }) => (
+            <li key={id}>
+              <Link to={`/store/${c.id}`} state={{ search: location.search }} className="block h-full rounded-2xl focus-visible:outline-offset-4">
                 <Card className="flex h-full items-center gap-4 p-4 transition hover:-translate-y-0.5">
                   <AppIcon icon={c.icon} name={c.title} />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 font-medium">
                       <span className="truncate">{c.title}</span>
-                      {c.installed && <Badge tone="ok">Instalado</Badge>}
+                      {members.some((m) => m.installed) && <Badge tone="ok">Instalado</Badge>}
                       {c.unsupported && <Badge tone="warn">Incompatível</Badge>}
                     </p>
                     <p className="line-clamp-2 text-sm text-muted">{c.tagline}</p>
-                    {c.source && <p className="truncate text-xs text-muted">{sourceName(c.source) ?? c.source}</p>}
+                    {sourceList.length > 0 && (
+                      <p className="mt-1 flex flex-wrap gap-1">
+                        {members.map((m) => (
+                          <Badge key={m.id}>{m.source ? (sourceName(m.source) ?? m.source) : 'OMV Home'}</Badge>
+                        ))}
+                      </p>
+                    )}
                   </div>
                 </Card>
               </Link>

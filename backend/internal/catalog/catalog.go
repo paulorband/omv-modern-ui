@@ -83,6 +83,8 @@ type Summary struct {
 	// Source is the custom source id ("" for built-in and remote-index apps).
 	Source      string `json:"source,omitempty"`
 	Unsupported bool   `json:"unsupported,omitempty"`
+	// Group is the id shared by the same app offered by different sources.
+	Group string `json:"group"`
 }
 
 // Parse validates and parses a template (A05.1).
@@ -260,7 +262,7 @@ func (c *Catalog) List(ctx context.Context, q, category, source string) []Summar
 		if q != "" && !strings.Contains(strings.ToLower(m.Title+" "+m.Tagline+" "+m.ID), q) {
 			continue
 		}
-		out = append(out, Summary{ID: m.ID, Title: m.Title, Tagline: m.Tagline, Icon: m.Icon, Category: m.Category, Source: t.Source, Unsupported: t.Unsupported != ""})
+		out = append(out, Summary{ID: m.ID, Title: m.Title, Tagline: m.Tagline, Icon: m.Icon, Category: m.Category, Source: t.Source, Unsupported: t.Unsupported != "", Group: t.group()})
 	}
 	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Title) < strings.ToLower(out[j].Title) })
 	return out
@@ -279,3 +281,40 @@ var ReservedVars = map[string]bool{"APPDATA": true, "PUID": true, "PGID": true, 
 
 // BuiltinSource is the pseudo source id used to filter the embedded catalog.
 const BuiltinSource = "builtin"
+
+// group is the key that collapses the same app offered by different sources: ids differ between
+// ecosystems (Umbrel, CasaOS) and clash suffixes, so the display title is what they share.
+func (t *Template) group() string {
+	if g := slugify(t.Meta.Title); g != "" {
+		return g
+	}
+	return t.Meta.ID
+}
+
+// Variant is one source's version of an app.
+type Variant struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
+}
+
+// Variants lists every template that is the same app as id (including id itself), built-in first.
+func (c *Catalog) Variants(ctx context.Context, id string) []Variant {
+	all := c.all(ctx)
+	t, ok := all[id]
+	if !ok {
+		return []Variant{}
+	}
+	out := []Variant{}
+	for _, o := range all {
+		if o.group() == t.group() {
+			out = append(out, Variant{ID: o.Meta.ID, Source: o.Source})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if (out[i].Source == "") != (out[j].Source == "") {
+			return out[i].Source == ""
+		}
+		return out[i].Source < out[j].Source
+	})
+	return out
+}

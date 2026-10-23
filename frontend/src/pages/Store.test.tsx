@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
-import { Store, filterStore } from './Store'
+import { Store, filterStore, groupStore } from './Store'
 import { StoreApp } from './StoreApp'
 import { InstallsWidget } from '../components/InstallsWidget'
 import { validateField, validatePort } from '../lib/install'
@@ -302,5 +302,83 @@ describe('install starts refresh the global widget (R10.12)', () => {
     await waitFor(() => expect(calls.filter((c) => c.path === '/store/installs')).toHaveLength(1))
     await user.click(await screen.findByRole('button', { name: /Instalar qBittorrent/ }))
     await waitFor(() => expect(calls.filter((c) => c.path === '/store/installs')).toHaveLength(2))
+  })
+})
+
+describe('Store sources grouping, URL filters and compose editing', () => {
+  const SOURCES = [{ id: 'umbrel', name: 'Umbrel' }, { id: 'casa', name: 'CasaOS' }]
+  const DUP: StoreCard[] = [
+    { id: 'jellyfin-umbrel', group: 'jellyfin', title: 'Jellyfin', tagline: '', icon: '', category: 'Media', installed: false, source: 'umbrel' },
+    { id: 'jellyfin', group: 'jellyfin', title: 'Jellyfin', tagline: '', icon: '', category: 'Media', installed: false },
+    { id: 'jellyfin-casa', group: 'jellyfin', title: 'Jellyfin', tagline: '', icon: '', category: 'Media', installed: false, source: 'casa' },
+    { id: 'pihole', group: 'pihole', title: 'Pi-hole', tagline: '', icon: '', category: 'Network', installed: false, source: 'casa' },
+  ]
+
+  it('groupStore puts the built-in app first and keeps others in order', () => {
+    const groups = groupStore(DUP)
+    expect(groups.map((g) => g.id)).toEqual(['jellyfin', 'pihole'])
+    expect(groups[0].primary.id).toBe('jellyfin')
+    expect(groups[0].cards.map((c) => c.id)).toEqual(['jellyfin', 'jellyfin-umbrel', 'jellyfin-casa'])
+  })
+
+  it('shows one card per app with a badge per source', async () => {
+    mockApi([{ path: '/store/apps', body: DUP }, { path: '/store/sources', body: SOURCES }])
+    renderApp(<Store />)
+    await screen.findByText('Pi-hole')
+    expect(screen.getAllByText('Jellyfin')).toHaveLength(1)
+    const card = screen.getByRole('link', { name: /Jellyfin/ })
+    expect(card).toHaveAttribute('href', '/store/jellyfin')
+    for (const name of ['OMV Home', 'Umbrel', 'CasaOS']) expect(within(card).getByText(name)).toBeInTheDocument()
+  })
+
+  it('restores filters from the URL', async () => {
+    mockApi([{ path: '/store/apps', body: CARDS }])
+    renderApp(<Store />, { route: '/store?category=Files' })
+    expect(await screen.findByText('Nextcloud')).toBeInTheDocument()
+    expect(screen.queryByText('Jellyfin')).not.toBeInTheDocument()
+  })
+
+  it('detail back link keeps the store filters', async () => {
+    mockApi([{ path: '/store/apps', body: CARDS }, { path: '/store/apps/nextcloud', body: { ...DETAIL, meta: { ...DETAIL.meta, id: 'nextcloud', env: [] } } }, { path: '/docker/status', body: { available: true, composeAvailable: true } }])
+    renderApp(
+      <Routes>
+        <Route path="/store" element={<Store />} />
+        <Route path="/store/:id" element={<StoreApp />} />
+      </Routes>,
+      { route: '/store?category=Files' },
+    )
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('link', { name: /Nextcloud/ }))
+    const back = await screen.findByRole('link', { name: /Voltar para a loja/ })
+    expect(back).toHaveAttribute('href', '/store?category=Files')
+    await user.click(back)
+    expect(await screen.findByText('Nextcloud')).toBeInTheDocument()
+    expect(screen.queryByText('Jellyfin')).not.toBeInTheDocument()
+  })
+
+  it('detail switches between sources and installs an edited compose', async () => {
+    const detail = { ...DETAIL, installed: false, compose: 'services:\n  a:\n    image: x\n', variants: [{ id: 'qbittorrent', source: '' }, { id: 'qbittorrent-umbrel', source: 'umbrel' }] }
+    const calls = mockApi([
+      { path: '/store/apps/qbittorrent', body: detail },
+      { path: '/store/sources', body: SOURCES },
+      { path: '/docker/status', body: { available: true, composeAvailable: true } },
+      { method: 'POST', path: '/store/apps/qbittorrent/install', status: 202, body: { jobId: 'qbittorrent' } },
+    ])
+    renderApp(
+      <Routes>
+        <Route path="/store/:id" element={<StoreApp />} />
+      </Routes>,
+      { route: '/store/qbittorrent' },
+    )
+    const user = userEvent.setup()
+    expect(await screen.findByRole('link', { name: 'Umbrel' })).toHaveAttribute('href', '/store/qbittorrent-umbrel')
+    expect(screen.getByRole('link', { name: 'OMV Home' })).toHaveAttribute('aria-current', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Editar' }))
+    const box = screen.getByLabelText('docker-compose.yml')
+    await user.type(box, '# meu ajuste')
+    await user.click(screen.getByRole('button', { name: /Instalar qBittorrent/ }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true))
+    expect((calls.find((c) => c.method === 'POST')!.body as { compose: string }).compose).toContain('# meu ajuste')
   })
 })
