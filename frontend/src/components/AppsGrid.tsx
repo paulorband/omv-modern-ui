@@ -5,6 +5,7 @@ import { Search, Store } from 'lucide-react'
 import { del, get, post } from '../lib/api'
 import type { App } from '../lib/types'
 import { AppCard, type AppAction } from './AppCard'
+import { EditAppDialog } from './EditAppDialog'
 import { LogViewer } from './LogViewer'
 import { useToast } from './Toast'
 import { Button, EmptyState, ErrorBox, Field, Modal, Spinner, cx, errorMessage, inputCls } from './ui'
@@ -25,6 +26,7 @@ export function AppsGrid() {
   const [category, setCategory] = useState(ALL)
   const [logsFor, setLogsFor] = useState<App | null>(null)
   const [removing, setRemoving] = useState<App | null>(null)
+  const [editing, setEditing] = useState<App | null>(null)
 
   const apps = useQuery({ queryKey: ['apps'], queryFn: ({ signal }) => get<App[]>('/apps', signal), refetchInterval: 10_000 })
 
@@ -44,6 +46,7 @@ export function AppsGrid() {
   const onAction = (app: App, a: AppAction) => {
     if (a === 'logs') setLogsFor(app)
     else if (a === 'remove') setRemoving(app)
+    else if (a === 'edit') setEditing(app)
     else control.mutate({ app, action: a })
   }
   const busyId = control.isPending ? control.variables?.app.id : undefined
@@ -109,6 +112,7 @@ export function AppsGrid() {
       </Modal>
 
       {removing && <RemoveAppDialog app={removing} onClose={() => setRemoving(null)} />}
+      {editing && <EditAppDialog app={editing} onClose={() => setEditing(null)} />}
     </section>
   )
 }

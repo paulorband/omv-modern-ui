@@ -229,3 +229,46 @@ func TestUninstallUnmanagedRemovesContainers(t *testing.T) {
 func (f *fakeCompose) SeedDir(context.Context, string, string, string) error { return nil }
 
 func (f *fakeCompose) ImageUser(context.Context, string) (int, int, bool) { return 0, 0, false }
+
+const labelledCompose = "services:\n  web:\n    image: x\n    labels:\n      omvhome.app: jellyfin\n"
+
+func TestRedeployWritesFilesAndUps(t *testing.T) {
+	s, fc, _ := setup(t)
+	writeProject(t, s, "jellyfin")
+	files := ComposeFiles{Compose: labelledCompose, Env: "A=1\n"}
+	if err := s.Redeploy(context.Background(), "jellyfin", files, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ReadCompose(context.Background(), "jellyfin")
+	if err != nil || *got != files {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if !reflect.DeepEqual(fc.calls, []string{"up omvhome-jellyfin"}) {
+		t.Fatalf("calls: %v", fc.calls)
+	}
+}
+
+func TestRedeployValidation(t *testing.T) {
+	s, fc, _ := setup(t)
+	if err := s.Redeploy(context.Background(), "jellyfin", ComposeFiles{Compose: labelledCompose}, false, nil); !errors.Is(err, ErrNotManaged) {
+		t.Fatalf("want ErrNotManaged, got %v", err)
+	}
+	writeProject(t, s, "jellyfin")
+	for name, yml := range map[string]string{
+		"yaml":    "services: [",
+		"noLabel": "services:\n  web:\n    image: x\n",
+		"unsafe":  labelledCompose + "    privileged: true\n",
+		"noSvc":   "version: '3'\n",
+	} {
+		var bad *ErrInvalidCompose
+		if err := s.Redeploy(context.Background(), "jellyfin", ComposeFiles{Compose: yml}, false, nil); !errors.As(err, &bad) {
+			t.Errorf("%s: want ErrInvalidCompose, got %v", name, err)
+		}
+	}
+	if err := s.Redeploy(context.Background(), "jellyfin", ComposeFiles{Compose: labelledCompose + "    privileged: true\n"}, true, nil); err != nil {
+		t.Fatalf("allowUnsafe: %v", err)
+	}
+	if len(fc.calls) != 1 {
+		t.Fatalf("calls: %v", fc.calls)
+	}
+}

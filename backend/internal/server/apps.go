@@ -21,6 +21,10 @@ func appsErr(err error) error {
 	case errors.Is(err, apps.ErrBadID), errors.Is(err, apps.ErrNoPurge):
 		return httpx.BadRequest("%s", err.Error())
 	}
+	var bad *apps.ErrInvalidCompose
+	if errors.As(err, &bad) {
+		return httpx.BadRequest("%s", bad.Msg)
+	}
 	return dockerErr(err)
 }
 
@@ -51,6 +55,30 @@ func (d Deps) registerApps(api *http.ServeMux, protect func(http.Handler) http.H
 
 	api.Handle("POST /apps/{id}/update", h(func(w http.ResponseWriter, r *http.Request) error {
 		if err := d.Apps.Update(r.Context(), r.PathValue("id"), nil); err != nil {
+			return appsErr(err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	}))
+
+	api.Handle("GET /apps/{id}/compose", h(func(w http.ResponseWriter, r *http.Request) error {
+		files, err := d.Apps.ReadCompose(r.Context(), r.PathValue("id"))
+		if err != nil {
+			return appsErr(err)
+		}
+		httpx.JSON(w, http.StatusOK, files)
+		return nil
+	}))
+
+	api.Handle("PUT /apps/{id}/compose", h(func(w http.ResponseWriter, r *http.Request) error {
+		var req struct {
+			apps.ComposeFiles
+			AllowUnsafe bool `json:"allowUnsafe"`
+		}
+		if err := httpx.Decode(r, &req); err != nil {
+			return err
+		}
+		if err := d.Apps.Redeploy(r.Context(), r.PathValue("id"), req.ComposeFiles, req.AllowUnsafe, nil); err != nil {
 			return appsErr(err)
 		}
 		w.WriteHeader(http.StatusNoContent)

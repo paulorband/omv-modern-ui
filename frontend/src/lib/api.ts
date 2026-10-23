@@ -53,3 +53,4 @@ export const get = <T>(path: string, signal?: AbortSignal) => api<T>(path, { sig
 export const post = <T = void>(path: string, body?: unknown) => api<T>(path, { method: 'POST', body: body ?? {} })
 export const patch = <T = void>(path: string, body: unknown) => api<T>(path, { method: 'PATCH', body })
 export const del = <T = void>(path: string) => api<T>(path, { method: 'DELETE' })
+export const put = <T = void>(path: string, body: unknown) => api<T>(path, { method: 'PUT', body })

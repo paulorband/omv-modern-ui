@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileText, MoreVertical, Play, RefreshCw, RotateCw, Square, Trash2 } from 'lucide-react'
+import { FileText, MoreVertical, Pencil, Play, RefreshCw, RotateCw, Square, Trash2 } from 'lucide-react'
 import { appUrl } from '../lib/format'
 import type { App } from '../lib/types'
 import { AppIcon } from './AppIcon'
 import { cx } from './ui'
 
-export type AppAction = 'start' | 'stop' | 'restart' | 'logs' | 'update' | 'remove'
+export type AppAction = 'start' | 'stop' | 'restart' | 'logs' | 'update' | 'edit' | 'remove'
 
 const STATE_LABEL: Record<App['state'], string> = { running: 'Em execução', stopped: 'Parado', partial: 'Parcial' }
 const STATE_DOT: Record<App['state'], string> = { running: 'bg-ok', stopped: 'bg-muted', partial: 'bg-warn' }
@@ -54,6 +54,7 @@ export function AppCard({ app, busy, highlight, onAction }: { app: App; busy?: b
       className={cx(
         'group relative h-full rounded-2xl border border-line bg-surface shadow-card backdrop-blur-xl transition hover:-translate-y-0.5',
         highlight && 'ring-2 ring-accent',
+        menu && 'z-30',
       )}
     >
       {running && canOpen ? (
@@ -94,6 +95,7 @@ export function AppCard({ app, busy, highlight, onAction }: { app: App; busy?: b
           <Item icon={RotateCw} label="Reiniciar" onClick={() => pick('restart')} />
           <Item icon={FileText} label="Ver logs" onClick={() => pick('logs')} />
           {app.managed && <Item icon={RefreshCw} label="Atualizar" onClick={() => pick('update')} />}
+          {app.managed && <Item icon={Pencil} label="Editar" onClick={() => pick('edit')} />}
           <div className="my-1 border-t border-line" />
           <Item icon={Trash2} label="Remover" danger onClick={() => pick('remove')} />
         </div>
